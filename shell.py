@@ -4,7 +4,8 @@ class Shell:
 
     def run(self):
         while True:
-            print("$", end="", flush=True)
+            print("$", end="")
+            input_line = input()
 
 
 if __name__ == "__main__":
