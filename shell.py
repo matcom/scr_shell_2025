@@ -1,7 +1,7 @@
 import os
-from cola import Cola
 import re
 import subprocess
+from cola import Cola
 
 
 class Shell:
@@ -9,15 +9,20 @@ class Shell:
         self.cola = Cola()
 
     def parse_command(self, _command):
-        __command = re.sub(r"\s+", " ", _command).strip()
-        tokens = re.findall(r'"[^"]*"|\'[^\']*\'|\S+', __command)
-        return tokens
+        normalized = re.sub(r"\s+", " ", _command).strip()
+        return re.findall(r'"[^"]*"|\'[^\']*\'|\S+', normalized)
 
     def execute(self, command):
-        if len(command) > 1:
-            if command[0] == "cd":
-                os.chdir(command[1])
-                return
+        if not command:
+            return
+
+        if command[0] == "cd":
+            try:
+                os.chdir(command[1] if len(command) > 1 else os.path.expanduser("~"))
+            except Exception as e:
+                print(f"{e}")
+            return
+
         result = subprocess.run(
             command,
             check=True,
@@ -25,7 +30,7 @@ class Shell:
             stderr=subprocess.PIPE,
             text=True,
         )
-        print(result.stdout, end="")
+        print(result.stdout, end="", flush=True)
 
     def process_input(self, input_line):
         if input_line == "":
@@ -35,8 +40,8 @@ class Shell:
 
     def run(self):
         while True:
-            print("$", end="")
-            input_line = input()
+            print("$ ", end="", flush=True)
+            input_line = input().strip()
             self.process_input(input_line)
 
 
