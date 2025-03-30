@@ -14,6 +14,10 @@ class Shell:
         return tokens
 
     def execute(self, command):
+        if len(command) > 1:
+            if command[0] == "cd":
+                os.chdir(command[1])
+                return
         result = subprocess.run(
             command,
             check=True,
