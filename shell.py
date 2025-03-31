@@ -1,16 +1,16 @@
 import os
 import re
 import subprocess
-from cola import Cola
+from pila import Pila
 
 
 class Shell:
     def __init__(self):
-        self.cola = Cola()
+        self.pila = Pila()
 
     def parse_command(self, _command):
-        normalized = re.sub(r"\s+", " ", _command).strip()
-        return re.findall(r'"[^"]*"|\'[^\']*\'|\S+', normalized)
+        __command = re.sub(r"\s+", " ", _command).strip()
+        return re.findall(r'"[^"]*"|\'[^\']*\'|\S+', __command)
 
     def execute(self, command):
         if not command:
@@ -37,6 +37,11 @@ class Shell:
             return
         command = self.parse_command(input_line)
         self.execute(command)
+        if self.pila.size > 0:
+            if self.pila.tail.valor != " ".join(command).strip():
+                self.pila.add(" ".join(command).strip())
+        else:
+            self.pila.add(" ".join(command).strip())
 
     def run(self):
         while True:
