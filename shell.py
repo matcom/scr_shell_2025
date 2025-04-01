@@ -22,6 +22,12 @@ class Shell:
             except Exception as e:
                 print(f"{e}")
             return
+        if command[0] == "history":
+            self.pila.add("history")
+            print(self.pila, flush=True)
+            return
+        if command[0] == "ls":
+            command.append("-x")
 
         result = subprocess.run(
             command,
