@@ -32,7 +32,6 @@ class Shell:
                 print(f"{e}")
             return
         if command[0] == "history":
-            self.pila.add("history")
             print(self.pila, flush=True)
             return
         if command[0] == "ls":
@@ -55,16 +54,17 @@ class Shell:
             return
         command = self.parse_command(input_line)
         self.execute(command)
-        if self.pila.size > 0:
-            if self.pila.tail.valor != " ".join(command).strip():
+        if input_line[0] != " ":
+            if self.pila.size > 0:
+                if self.pila.tail.valor != " ".join(command).strip():
+                    self.pila.add(" ".join(command).strip())
+            else:
                 self.pila.add(" ".join(command).strip())
-        else:
-            self.pila.add(" ".join(command).strip())
 
     def run(self):
         while True:
             print("$ ", end="", flush=True)
-            input_line = input().strip()
+            input_line = input()
             self.process_input(input_line)
 
 

@@ -50,7 +50,7 @@ class Pila:
 
     def __str__(self):
         if not self.tail:
-            return "Pila vacía"
+            return "Historial vacío"
 
         if self._cache and len(self._cache) == self.size:
             elementos = self._cache
