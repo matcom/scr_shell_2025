@@ -12,6 +12,15 @@ class Shell:
         __command = re.sub(r"\s+", " ", _command).strip()
         return re.findall(r'"[^"]*"|\'[^\']*\'|\S+', __command)
 
+    def sub(self, command):
+        return subprocess.run(
+            command,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
     def execute(self, command):
         if not command:
             return
@@ -27,15 +36,18 @@ class Shell:
             print(self.pila, flush=True)
             return
         if command[0] == "ls":
-            command.append("-x")
+            result = self.sub(command)
+            columnas = 4
+            files = result.stdout.split()
+            max_width = max(len(file) for file in files) + 2 if files else 0
+            for i in range(0, len(files), columnas):
+                fila = files[i : i + columnas]
+                fila_formateada = [f"{file.ljust(max_width)}" for file in fila]
+                print("".join(fila_formateada))
 
-        result = subprocess.run(
-            command,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+            return
+
+        result = self.sub(command)
         print(result.stdout, end="", flush=True)
 
     def process_input(self, input_line):
