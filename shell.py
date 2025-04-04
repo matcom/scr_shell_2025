@@ -22,14 +22,18 @@ class Shell:
     def sub(self, command, shell=False):
         if shell and isinstance(command, list):
             command = " ".join(command)
-        return subprocess.run(
-            command,
-            check=True,
-            shell=shell,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        try:
+            return subprocess.run(
+                command,
+                check=True,
+                shell=shell,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except Exception as e:
+            print(f"{e.stderr}", end="", flush=True)
+            return
 
     def execute(self, command):
         if not command:
@@ -45,23 +49,14 @@ class Shell:
             print(self.pila, flush=True)
             return
         if command[0] == "ls":
-            if not len(command) == 1:
-                result = self.sub(command, True)
+            result = self.sub(command, True)
+            if result:
                 print(result.stdout, end="", flush=True)
-                return
-            result = self.sub(command)
-            columnas = 4
-            files = result.stdout.split()
-            max_width = max(len(file) for file in files) + 2 if files else 0
-            for i in range(0, len(files), columnas):
-                fila = files[i : i + columnas]
-                fila_formateada = [f"{file.ljust(max_width)}" for file in fila]
-                print("".join(fila_formateada))
-
             return
 
-        result = self.sub(command)
-        print(result.stdout, end="", flush=True)
+        result = self.sub(command, True)
+        if result:
+            print(result.stdout, end="", flush=True)
 
     def search_history(self, comando):
         if len(comando) == 1:
@@ -73,7 +68,7 @@ class Shell:
                 self.execute(command)
                 return
             else:
-                print("No hay comandos en el historial")
+                print("No hay comandos en el historial", flush=True)
         elif comando.startswith("!") and comando[1:].isdigit():
             try:
                 comand = self.pila.search(comando[1:])
@@ -81,7 +76,7 @@ class Shell:
                 self.execute(result)
                 return result
             except IndexError:
-                print(f"No existe el comando en la posición {index}")
+                print(f"No existe el comando en la posición {index}", flush=True)
                 return
 
         else:
@@ -95,6 +90,7 @@ class Shell:
             if command and input_line[0] != " ":
                 self.add_stack(command)
             return
+
         command = self.parse_command(input_line)
         self.execute(command)
         if input_line[0] != " ":
