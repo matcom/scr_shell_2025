@@ -98,9 +98,12 @@ class Shell:
 
     def run(self):
         while True:
-            print("$ ", end="", flush=True)
-            input_line = input()
-            self.process_input(input_line)
+            try:
+                print("$ ", end="", flush=True)
+                input_line = input()
+                self.process_input(input_line)
+            except KeyboardInterrupt:
+                continue
 
 
 if __name__ == "__main__":
