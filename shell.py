@@ -12,10 +12,13 @@ class Shell:
         __command = re.sub(r"\s+", " ", _command).strip()
         return re.findall(r'"[^"]*"|\'[^\']*\'|\S+', __command)
 
-    def sub(self, command):
+    def sub(self, command, shell=False):
+        if shell and isinstance(command, list):
+            command = " ".join(command)
         return subprocess.run(
             command,
             check=True,
+            shell=shell,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -36,7 +39,7 @@ class Shell:
             return
         if command[0] == "ls":
             if not len(command) == 1:
-                result = self.sub(command)
+                result = self.sub(command, True)
                 print(result.stdout, end="", flush=True)
                 return
             result = self.sub(command)
