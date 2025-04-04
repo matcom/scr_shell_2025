@@ -8,6 +8,13 @@ class Shell:
     def __init__(self):
         self.pila = Pila()
 
+    def add_stack(self, command):
+        if self.pila.size > 0:
+            if self.pila.tail.valor != " ".join(command).strip():
+                self.pila.add(" ".join(command).strip())
+        else:
+            self.pila.add(" ".join(command).strip())
+
     def parse_command(self, _command):
         __command = re.sub(r"\s+", " ", _command).strip()
         return re.findall(r'"[^"]*"|\'[^\']*\'|\S+', __command)
@@ -60,9 +67,23 @@ class Shell:
         if len(comando) == 1:
             return
         elif comando == "!!":
-            return
-        elif cmd.startswith("!") and cmd[1:].isdigit():
-            return
+            if self.pila.size > 0:
+                ultimo_comando = self.pila.tail.valor
+                command = self.parse_command(ultimo_comando)
+                self.execute(command)
+                return
+            else:
+                print("No hay comandos en el historial")
+        elif comando.startswith("!") and comando[1:].isdigit():
+            try:
+                comand = self.pila.search(comando[1:])
+                result = self.parse_command(comand)
+                self.execute(result)
+                return comand
+            except IndexError:
+                print(f"No existe el comando en la posición {index}")
+                return
+
         else:
             return
 
@@ -70,16 +91,14 @@ class Shell:
         if input_line == "":
             return
         if input_line.startswith("!"):
-            self.search_history(input_line)
+            command = self.search_history(input_line)
+            if command and input_line[0] != " ":
+                self.add_stack(command)
             return
         command = self.parse_command(input_line)
         self.execute(command)
         if input_line[0] != " ":
-            if self.pila.size > 0:
-                if self.pila.tail.valor != " ".join(command).strip():
-                    self.pila.add(" ".join(command).strip())
-            else:
-                self.pila.add(" ".join(command).strip())
+            self.add_stack(command)
 
     def run(self):
         while True:

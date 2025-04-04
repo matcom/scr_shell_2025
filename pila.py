@@ -14,6 +14,17 @@ class Pila:
         self._cache = None
         self.max_size = 50
 
+    def search(self, comando):
+        if self._cache and len(self._cache) == self.size:
+            elementos = self._cache
+        else:
+            elementos = list(self)
+        ultimos_elementos = elementos[-50:] if len(elementos) > 50 else elementos
+        for i, elem in enumerate(reversed(ultimos_elementos)):
+            if i + 1 == int(comando.strip()):
+                return elem
+        raise IndexError()
+
     def add(self, valor):
         new_nodo = Nodo(valor)
         new_nodo.back = self.tail
