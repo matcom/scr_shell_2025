@@ -79,7 +79,7 @@ class Shell:
                 comand = self.pila.search(comando[1:])
                 result = self.parse_command(comand)
                 self.execute(result)
-                return comand
+                return result
             except IndexError:
                 print(f"No existe el comando en la posición {index}")
                 return
