@@ -35,6 +35,10 @@ class Shell:
             print(self.pila, flush=True)
             return
         if command[0] == "ls":
+            if not len(command) == 1:
+                result = self.sub(command)
+                print(result.stdout, end="", flush=True)
+                return
             result = self.sub(command)
             columnas = 4
             files = result.stdout.split()

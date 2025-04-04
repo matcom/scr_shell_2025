@@ -12,13 +12,29 @@ class Pila:
         self.tail = None
         self.size = 0
         self._cache = None
+        self.max_size = 50
 
     def add(self, valor):
         new_nodo = Nodo(valor)
         new_nodo.back = self.tail
         self.tail = new_nodo
         self.size += 1
+
+        if self.size > self.max_size:
+            self._eliminar_mas_antiguo()
+
         self._cache = None
+
+    def _eliminar_mas_antiguo(self):
+        if self.size <= 1:
+            self.tail = None
+            self.size = 0
+            return
+        actual = self.tail
+        while actual.back and actual.back.back:
+            actual = actual.back
+        actual.back = None
+        self.size -= 1
 
     def pop(self):
         if not self.tail:
@@ -57,7 +73,11 @@ class Pila:
         else:
             elementos = list(self)
 
-        return "\n".join(f"{i+1}: {elem}" for i, elem in enumerate(elementos[::-1]))
+        ultimos_elementos = elementos[-50:] if len(elementos) > 50 else elementos
+
+        return "\n".join(
+            f"{i+1}: {elem}" for i, elem in enumerate(reversed(ultimos_elementos))
+        )
 
     def __contains__(self, valor):
         return any(item == valor for item in self)
