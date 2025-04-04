@@ -42,21 +42,25 @@ class Shell:
         if command[0] == "cd":
             try:
                 os.chdir(command[1] if len(command) > 1 else os.path.expanduser("~"))
+                return "rdy"
             except Exception as e:
                 print(f"{e}")
-            return
+                return
         if command[0] == "history":
             print(self.pila, flush=True)
-            return
+            return "rdy"
         if command[0] == "ls":
             result = self.sub(command, True)
             if result:
-                print(result.stdout, end="", flush=True)
+                print(result.stdout.strip(), flush=True)
+                return "rdy"
             return
 
         result = self.sub(command, True)
         if result:
-            print(result.stdout, end="", flush=True)
+            print(result.stdout.strip(), flush=True)
+            return "rdy"
+        return
 
     def search_history(self, comando):
         if len(comando) == 1:
@@ -92,8 +96,8 @@ class Shell:
             return
 
         command = self.parse_command(input_line)
-        self.execute(command)
-        if input_line[0] != " ":
+        result = self.execute(command)
+        if result and input_line[0] != " ":
             self.add_stack(command)
 
     def run(self):
