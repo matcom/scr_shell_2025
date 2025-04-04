@@ -56,8 +56,21 @@ class Shell:
         result = self.sub(command)
         print(result.stdout, end="", flush=True)
 
+    def search_history(self, comando):
+        if len(comando) == 1:
+            return
+        elif comando == "!!":
+            return
+        elif cmd.startswith("!") and cmd[1:].isdigit():
+            return
+        else:
+            return
+
     def process_input(self, input_line):
         if input_line == "":
+            return
+        if input_line.startswith("!"):
+            self.search_history(input_line)
             return
         command = self.parse_command(input_line)
         self.execute(command)
