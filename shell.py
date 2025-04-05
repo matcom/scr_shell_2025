@@ -162,7 +162,7 @@ class Shell:
             return
 
         background = False
-        if "&" in command[-1]:
+        if "&" == command[-1]:
             background = True
             command = command[:-1]
 
@@ -181,8 +181,8 @@ class Shell:
         if result and not background:
             print(result.stdout.strip(), end="\n", flush=True)
         elif background:
-
-            print(f"[{self.next_jobs+1}]\t{result.pid}", flush=True)
+            self.next_jobs += 1
+            print(f"[{self.next_jobs}]\t{result.pid}", flush=True)
 
     def search_history(self, comando):
         if len(comando) == 1:
