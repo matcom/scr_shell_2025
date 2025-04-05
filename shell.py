@@ -117,6 +117,7 @@ class Pila:
 class Shell:
     def __init__(self):
         self.pila = Pila()
+        self.next_jobs = 0
 
     def add_stack(self, command):
         if len(self.pila) > 0:
@@ -180,7 +181,8 @@ class Shell:
         if result and not background:
             print(result.stdout.strip(), end="\n", flush=True)
         elif background:
-            print(f"[{result.pid}]", flush=True)
+
+            print(f"[{self.next_jobs+1}]\t{result.pid}", flush=True)
 
     def search_history(self, comando):
         if len(comando) == 1:
