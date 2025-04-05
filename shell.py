@@ -72,15 +72,6 @@ class Pila:
         actual.back = None
         self.size -= 1
 
-    def pop(self):
-        if not self.tail:
-            raise IndexError("No hay elementos en la pila")
-        valor = self.tail.valor
-        self.tail = self.tail.back
-        self.size -= 1
-        self._cache = None
-        return valor
-
     def __iter__(self):
         actual = self.tail
         while actual:
@@ -138,10 +129,19 @@ class Shell:
         __command = re.sub(r"\s+", " ", _command).strip()
         return re.findall(r'"[^"]*"|\'[^\']*\'|\S+', __command)
 
-    def sub(self, command, shell=False):
+    def sub(self, command, shell=False, background=False):
         if shell and isinstance(command, list):
             command = " ".join(command)
         try:
+            if background:
+                return subprocess.Popen(
+                    command,
+                    shell=shell,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
             return subprocess.run(
                 command,
                 check=True,
@@ -159,6 +159,11 @@ class Shell:
     def execute(self, command):
         if not command:
             return
+        print(command)
+        background = False
+        if command[-1] == "&":
+            background = True
+            command = command[:-1]
 
         if command[0] == "cd":
             try:
@@ -171,9 +176,11 @@ class Shell:
             print(self.pila, flush=True)
             return
 
-        result = self.sub(command, True)
-        if result:
+        result = self.sub(command, True, background)
+        if result and not background:
             print(result.stdout.strip(), end="\n", flush=True)
+        elif background:
+            print(f"[{result.pid}]", flush=True)
 
     def search_history(self, comando):
         if len(comando) == 1:
@@ -222,6 +229,7 @@ class Shell:
 
         self.execute(command)
 
+    @property
     def run(self):
         while True:
             try:
@@ -233,5 +241,4 @@ class Shell:
 
 
 if __name__ == "__main__":
-    shell = Shell()
-    shell.run()
+    Shell().run
