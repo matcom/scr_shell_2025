@@ -24,7 +24,11 @@ class Pila:
             elementos = self._cache
         else:
             elementos = list(self)
-        ultimos_elementos = elementos[-50:] if len(elementos) > 50 else elementos
+        ultimos_elementos = (
+            elementos[-self.max_size :]
+            if len(elementos) >= self.max_size
+            else elementos
+        )
         for i, elem in enumerate(reversed(ultimos_elementos)):
             if i + 1 == int(comando.strip()):
                 return elem
@@ -36,7 +40,11 @@ class Pila:
         else:
             elementos = list(self)
 
-        ultimos_elementos = elementos[-50:] if len(elementos) > 50 else elementos
+        ultimos_elementos = (
+            elementos[-self.max_size :]
+            if len(elementos) >= self.max_size
+            else elementos
+        )
         for i in ultimos_elementos:
             if i.split()[0] == comand:
                 return i
@@ -101,7 +109,11 @@ class Pila:
         else:
             elementos = list(self)
 
-        ultimos_elementos = elementos[-50:] if len(elementos) > 50 else elementos
+        ultimos_elementos = (
+            elementos[-self.max_size :]
+            if len(elementos) >= self.max_size
+            else elementos
+        )
 
         return "\n".join(
             f"{i+1}: {elem}" for i, elem in enumerate(reversed(ultimos_elementos))
@@ -137,6 +149,8 @@ class Shell:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
         except Exception as e:
             print(f"{e.stderr}", end="", flush=True)
@@ -203,10 +217,10 @@ class Shell:
                 self.add_stack(result)
             return
 
-        self.execute(command)
-
         if input_line[0] != " ":
             self.add_stack(command)
+
+        self.execute(command)
 
     def run(self):
         while True:
