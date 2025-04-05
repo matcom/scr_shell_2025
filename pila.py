@@ -25,6 +25,18 @@ class Pila:
                 return elem
         raise IndexError()
 
+    def search_comand(self, comand):
+        if self._cache and len(self._cache) == self.size:
+            elementos = self._cache
+        else:
+            elementos = list(self)
+
+        ultimos_elementos = elementos[-50:] if len(elementos) > 50 else elementos
+        for i in ultimos_elementos:
+            if i.split()[0] == comand:
+                return i
+        raise IndexError()
+
     def add(self, valor):
         new_nodo = Nodo(valor)
         new_nodo.back = self.tail
