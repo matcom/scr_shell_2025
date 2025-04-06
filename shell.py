@@ -1,6 +1,22 @@
 import os
 import re
 import subprocess
+import threading
+from collections import defaultdict
+import signal
+
+COLORS = {
+    "RED": "\033[91m",
+    "GREEN": "\033[92m",
+    "YELLOW": "\033[93m",
+    "BLUE": "\033[94m",
+    "MAGENTA": "\033[95m",
+    "CYAN": "\033[96m",
+    "WHITE": "\033[97m",
+    "RESET": "\033[0m",
+    "BOLD": "\033[1m",
+    "UNDERLINE": "\033[4m",
+}
 
 
 class Nodo:
@@ -93,7 +109,7 @@ class Pila:
 
     def __str__(self):
         if not self.tail:
-            return "Historial vacío"
+            return f"{COLORS['YELLOW']}Historial vacío{COLORS['RESET']}"
 
         if self._cache and len(self._cache) == self.size:
             elementos = self._cache
@@ -107,7 +123,8 @@ class Pila:
         )
 
         return "\n".join(
-            f"{i+1}: {elem}" for i, elem in enumerate(reversed(ultimos_elementos))
+            f"{COLORS['CYAN']}{i+1}:{COLORS['RESET']} {elem}"
+            for i, elem in enumerate(reversed(ultimos_elementos))
         )
 
     def __contains__(self, valor):
@@ -117,7 +134,11 @@ class Pila:
 class Shell:
     def __init__(self):
         self.pila = Pila()
-        self.next_jobs = 0
+        self.jobs = {}
+        self.next_job_id = 1
+        self.current_fg_job = None
+        self.prompt_ready = True
+        self.original_sigint = signal.getsignal(signal.SIGINT)
 
     def add_stack(self, command):
         if len(self.pila) > 0:
@@ -130,39 +151,99 @@ class Shell:
         __command = re.sub(r"\s+", " ", _command).strip()
         return re.findall(r'"[^"]*"|\'[^\']*\'|\S+', __command)
 
+    def execute_in_bg(self, comando):
+        proceso = subprocess.Popen(
+            comando,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+        return proceso
+
+    def wait_and_notify(self, proceso, comando_str, job_id):
+        proceso.wait()
+        self.prompt_ready = True
+        codigo_retorno = proceso.returncode
+        if codigo_retorno == 0:
+            print(
+                f"\n{COLORS['GREEN']}[{job_id}] '{comando_str}' finalizó con éxito.{COLORS['RESET']}"
+            )
+        else:
+            print(
+                f"\n{COLORS['RED']}[{job_id}] '{comando_str}' falló con código {codigo_retorno}.{COLORS['RESET']}"
+            )
+            if proceso.stderr:
+                print(f"{COLORS['RED']}Error:{COLORS['RESET']}")
+                print(proceso.stderr.read())
+        self.jobs.pop(job_id, None)
+        if self.prompt_ready:
+            print("$ ", end="", flush=True)
+
     def sub(self, command, shell=False, background=False):
         if shell and isinstance(command, list):
             command = " ".join(command)
         try:
             if background:
-                return subprocess.Popen(
+                self.prompt_ready = False
+                proceso = self.execute_in_bg(command)
+                job_id = self.next_job_id
+                self.next_job_id += 1
+                self.jobs[job_id] = {
+                    "pid": proceso.pid,
+                    "command": command,
+                    "process": proceso,
+                    "status": "running",
+                }
+                threading.Thread(
+                    target=self.wait_and_notify,
+                    args=(proceso, command, job_id),
+                    daemon=True,
+                ).start()
+                return job_id, proceso
+            else:
+                signal.signal(signal.SIGINT, self.original_sigint)
+                result = subprocess.run(
                     command,
+                    check=True,
                     shell=shell,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    start_new_session=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
-            return subprocess.run(
-                command,
-                check=True,
-                shell=shell,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
+                signal.signal(signal.SIGINT, self.handle_sigint)
+                return result
+        except subprocess.CalledProcessError as e:
+            print(f"{COLORS['RED']}{e.stderr}{COLORS['RESET']}", end="", flush=True)
+            return None
         except Exception as e:
-            print(f"{e.stderr}", end="", flush=True)
-            return
+            print(f"{COLORS['RED']}Error: {str(e)}{COLORS['RESET']}", flush=True)
+            return None
+
+    def handle_sigint(self, signum, frame):
+        if self.current_fg_job:
+            job = self.jobs.get(self.current_fg_job)
+            if job:
+                try:
+                    os.kill(job["pid"], signal.SIGINT)
+                    print()
+                except ProcessLookupError:
+                    pass
+        else:
+            print(
+                f"\n{COLORS['YELLOW']}Para salir use 'exit' o Ctrl+D{COLORS['RESET']}"
+            )
+            print("$ ", end="", flush=True)
 
     def execute(self, command):
         if not command:
             return
 
         background = False
-        if "&" == command[-1]:
+        if command[-1] == "&":
             background = True
             command = command[:-1]
 
@@ -170,19 +251,144 @@ class Shell:
             try:
                 os.chdir(command[1] if len(command) > 1 else os.path.expanduser("~"))
             except Exception as e:
-                print(f"cd: {e.args[1]}: {command[1]}", flush=True)
+                print(
+                    f"{COLORS['RED']}cd: {e.args[1]}: {command[1]}{COLORS['RESET']}",
+                    flush=True,
+                )
             return
 
         if command[0] == "history":
             print(self.pila, flush=True)
             return
 
+        if command[0] == "jobs":
+            self.list_jobs()
+            return
+
+        if command[0] == "fg":
+            self.foreground_job(command[1] if len(command) > 1 else None)
+            return
+
+        if command[0] == "bg":
+            self.background_job(command[1] if len(command) > 1 else None)
+            return
+
+        if command[0] == "exit":
+            raise EOFError()
+
         result = self.sub(command, True, background)
         if result and not background:
-            print(result.stdout.strip(), end="\n", flush=True)
-        elif background:
-            self.next_jobs += 1
-            print(f"[{self.next_jobs}]\t{result.pid}", flush=True)
+            if isinstance(result, subprocess.CompletedProcess):
+                print(result.stdout, end="", flush=True)
+        elif background and result:
+            job_id, proceso = result
+            print(
+                f"{COLORS['CYAN']}[{job_id}] {proceso.pid}{COLORS['RESET']}", flush=True
+            )
+
+    def list_jobs(self):
+        if not self.jobs:
+            print(
+                f"{COLORS['YELLOW']}No hay trabajos en segundo plano{COLORS['RESET']}",
+                flush=True,
+            )
+            return
+
+        for job_id, job_info in self.jobs.items():
+            status_color = (
+                COLORS["YELLOW"] if job_info["status"] == "stopped" else COLORS["GREEN"]
+            )
+            status = "Detenido" if job_info["status"] == "stopped" else "Ejecutando"
+            print(
+                f"{COLORS['CYAN']}[{job_id}]{COLORS['RESET']} {job_info['pid']} {status_color}{status}{COLORS['RESET']}\t{job_info['command']}",
+                flush=True,
+            )
+
+    def foreground_job(self, job_spec=None):
+        if not job_spec:
+            if not self.jobs:
+                print(
+                    f"{COLORS['RED']}fg: no hay trabajos actuales{COLORS['RESET']}",
+                    flush=True,
+                )
+                return
+            job_id = max(self.jobs.keys())
+        else:
+            try:
+                job_id = int(job_spec)
+            except ValueError:
+                print(
+                    f"{COLORS['RED']}fg: argumento debe ser un ID de trabajo{COLORS['RESET']}",
+                    flush=True,
+                )
+                return
+
+        job = self.jobs.get(job_id)
+        if not job:
+            print(
+                f"{COLORS['RED']}fg: {job_id}: no existe ese trabajo{COLORS['RESET']}",
+                flush=True,
+            )
+            return
+
+        self.current_fg_job = job_id
+        try:
+            os.kill(job["pid"], signal.SIGCONT)
+            job["status"] = "running"
+            print(
+                f"{COLORS['BLUE']}Reanudando: {job['command']}{COLORS['RESET']}",
+                flush=True,
+            )
+            job["process"].wait()
+            self.jobs.pop(job_id, None)
+            self.current_fg_job = None
+            print("$ ", end="", flush=True)
+        except KeyboardInterrupt:
+            print()
+            self.current_fg_job = None
+            print("$ ", end="", flush=True)
+        except Exception as e:
+            print(f"{COLORS['RED']}fg: error: {str(e)}{COLORS['RESET']}", flush=True)
+            print("$ ", end="", flush=True)
+
+    def background_job(self, job_spec=None):
+        if not job_spec:
+            stopped_jobs = [
+                jid for jid, job in self.jobs.items() if job["status"] == "stopped"
+            ]
+            if not stopped_jobs:
+                print(
+                    f"{COLORS['RED']}bg: no hay trabajos detenidos{COLORS['RESET']}",
+                    flush=True,
+                )
+                return
+            job_id = max(stopped_jobs)
+        else:
+            try:
+                job_id = int(job_spec)
+            except ValueError:
+                print(
+                    f"{COLORS['RED']}bg: argumento debe ser un ID de trabajo{COLORS['RESET']}",
+                    flush=True,
+                )
+                return
+
+        job = self.jobs.get(job_id)
+        if not job:
+            print(
+                f"{COLORS['RED']}bg: {job_id}: no existe ese trabajo{COLORS['RESET']}",
+                flush=True,
+            )
+            return
+        try:
+            os.kill(job["pid"], signal.SIGCONT)
+            job["status"] = "running"
+            print(
+                f"{COLORS['CYAN']}[{job_id}] {job['command']} &{COLORS['RESET']}",
+                flush=True,
+            )
+        except Exception as e:
+            print(f"{COLORS['RED']}bg: error: {str(e)}{COLORS['RESET']}", flush=True)
 
     def search_history(self, comando):
         if len(comando) == 1:
@@ -194,7 +400,10 @@ class Shell:
                 self.execute(command)
                 return command
             else:
-                print("No hay comandos en el historial", flush=True)
+                print(
+                    f"{COLORS['YELLOW']}No hay comandos en el historial{COLORS['RESET']}",
+                    flush=True,
+                )
         elif comando.startswith("!") and comando[1:].isdigit():
             try:
                 comand = self.pila.search(comando[1:])
@@ -202,7 +411,10 @@ class Shell:
                 self.execute(result)
                 return result
             except IndexError:
-                print(f"No existe el comando en la posición {comando[1:]}", flush=True)
+                print(
+                    f"{COLORS['RED']}No existe el comando en la posición {comando[1:]}{COLORS['RESET']}",
+                    flush=True,
+                )
                 return -1
         else:
             try:
@@ -211,7 +423,10 @@ class Shell:
                 self.execute(result)
                 return result
             except IndexError:
-                print(f"No existe el comando: {comando[1:]}", flush=True)
+                print(
+                    f"{COLORS['RED']}No existe el comando: {comando[1:]}{COLORS['RESET']}",
+                    flush=True,
+                )
                 return -1
 
     def process_input(self, input_line):
@@ -233,14 +448,17 @@ class Shell:
 
     @property
     def run(self):
+        signal.signal(signal.SIGINT, self.handle_sigint)
         while True:
             try:
                 print("$ ", end="", flush=True)
                 input_line = input()
                 self.process_input(input_line)
             except KeyboardInterrupt:
-                print()
                 continue
+            except EOFError:
+                print(f"\n{COLORS['GREEN']}Saliendo...{COLORS['RESET']}", flush=True)
+                break
 
 
 if __name__ == "__main__":
