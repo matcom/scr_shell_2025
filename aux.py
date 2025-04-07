@@ -1,15 +1,13 @@
 import os
-import subprocess
+import sys
 from typing import List
+import subprocess
 
 
 class Shell:
     def __init__(self) -> None:
-        self.prompt = "$: "
-        self.paths: List[str] = [
-            os.path.expanduser("~"),
-            os.getcwd(),
-        ]
+        self.prompt = "$ "
+        self.paths: List[str] = [os.path.expanduser("~"), os.getcwd()]
         self.max_history = 5
 
     def _update_path_history(self, new_path: str) -> None:
@@ -18,73 +16,66 @@ class Shell:
             if len(self.paths) > self.max_history:
                 self.paths.pop(0)
 
-    def _handle_cd_command(self, tokens: List[str]) -> None:
+    def _handle_cd(self, tokens: List[str]) -> bool:
         try:
             if len(tokens) > 1 and tokens[1] == "-":
                 if len(self.paths) < 2:
-                    print("cd: no previous directory", flush=True)
-                    return
+                    print("cd: no previous directory", file=sys.stderr)
+                    return False
                 prev_dir = self.paths[-2]
                 os.chdir(prev_dir)
-                self._update_path_history(os.getcwd())
-                print(prev_dir, flush=True)
-                return
+                self._update_path_history(prev_dir)
+                print(prev_dir)
+                return True
 
-            if len(tokens) > 1 and tokens[1] == "--":
-                tokens = tokens[:1] + tokens[2:]
+            target_dir = os.path.expanduser("~") if len(tokens) == 1 else tokens[1]
+            target_dir = (
+                os.path.expanduser(target_dir)
+                if target_dir.startswith("~")
+                else target_dir
+            )
+            target_dir = os.path.expandvars(target_dir)
 
-            if len(tokens) == 1 or tokens[1] == "~":
-                new_dir = os.path.expanduser("~")
-            else:
-                new_dir = tokens[1]
-                if new_dir.startswith("~") and not new_dir.startswith("~/"):
-                    new_dir = os.path.expanduser(new_dir)
-                new_dir = os.path.expandvars(new_dir)
-
-            os.chdir(new_dir)
+            os.chdir(target_dir)
             self._update_path_history(os.getcwd())
+            return True
 
-        except FileNotFoundError:
-            print(f"cd: no such file or directory: {tokens[1]}", flush=True)
-        except NotADirectoryError:
-            print(f"cd: not a directory: {tokens[1]}", flush=True)
-        except PermissionError:
-            print(f"cd: permission denied: {tokens[1]}", flush=True)
         except Exception as e:
-            print(f"cd: {str(e)}: {tokens[1] if len(tokens) > 1 else ''}", flush=True)
+            print(f"cd: {e}", file=sys.stderr)
+            return False
 
-    def _handle_other_commands(self, input_line: str) -> None:
+    def _execute_command(self, command: str) -> int:
         try:
             result = subprocess.run(
-                input_line,
+                command,
                 shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                executable="/bin/bash" if os.name == "posix" else None,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                stdin=sys.stdin,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
             )
-
-            if result.stdout:
-                print(result.stdout, end="", flush=True)
-            if result.stderr:
-                print(result.stderr, end="", flush=True)
-
+            return result.returncode
         except Exception as e:
-            print(f"Error: {str(e)}", flush=True)
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
 
     def process_input(self, input_line: str) -> None:
-        if not input_line.strip():
+
+        input_line = input_line.strip()
+        if not input_line:
             return
 
         tokens = input_line.split()
-
         if tokens[0] == "cd":
-            self._handle_cd_command(tokens)
+            self._handle_cd(tokens)
         else:
-            self._handle_other_commands(input_line)
+            self._execute_command(input_line)
 
     def run(self) -> None:
+
         while True:
             try:
                 input_line = input(self.prompt)
@@ -95,7 +86,7 @@ class Shell:
             except KeyboardInterrupt:
                 print("^C")
             except Exception as e:
-                print(f"Unexpected error: {str(e)}", flush=True)
+                print(f"Error: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":
