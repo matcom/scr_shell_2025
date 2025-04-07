@@ -2,7 +2,7 @@ import pexpect
 import time
 import os
 
-SHELL_CMD = "python3 new_shell.py"
+SHELL_CMD = "python3 shell.py"
 
 
 def run_test_case(description, inputs, expected_outputs):
@@ -73,11 +73,11 @@ def main():
     run_test_case(
         "Pipes múltiples con redirección",
         [
-            "echo -e 'a\\nb\\nc' > input.txt",
+            "echo 'a\\nb\\nc' > input.txt",
             "cat input.txt | sort | uniq | wc -l > output.txt",
             "cat output.txt",
         ],
-        ["", "", "1"],
+        ["", "", "3"],
     )
 
     run_test_case(
@@ -89,7 +89,7 @@ def main():
     run_test_case(
         "Redirección de entrada y salida combinada",
         [
-            "echo -e '3\\n1\\n2' > nums.txt",
+            "echo '3\\n1\\n2' > nums.txt",
             "sort < nums.txt > sorted.txt",
             "cat sorted.txt",
         ],
@@ -154,7 +154,7 @@ def main():
     # run_test_case(
     #   "Combinación compleja: pipes, redirección y background",
     #  [
-    #     "echo -e 'a\\nb\\na' > input.txt",
+    #     "echo 'a\\nb\\na' > input.txt",
     #    "cat input.txt | sort | uniq > output.txt &",
     #   "jobs",
     # ],
