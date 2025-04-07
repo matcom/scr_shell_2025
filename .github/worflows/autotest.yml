@@ -1,0 +1,28 @@
+name: Test PR
+
+on:
+  pull_request_target:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  test-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cloning repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Get Test folder
+        uses: actions/checkout@v4
+        with:
+          repository: matcom/scr_shell_2025
+          path: environment
+      - name: Prepare environment
+        run: |
+          chmod -R +x .
+          rm -r tests/
+          cp -r tests/ .
+      - name: Test evaluation
+        run: |
+          ./tests/run_tests.sh
