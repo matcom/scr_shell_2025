@@ -52,9 +52,7 @@ class ShellToken(NamedTuple):
 
 class ShellLexer:
     def __init__(self) -> None:
-        # Patrones ordenados por prioridad (más específicos primero)
         self.patterns: List[Tuple[Pattern, ShellTokenType]] = [
-            # Redirecciones compuestas
             (re.compile(r"&>>"), ShellTokenType.REDIRECT_APPEND_OUT_ERR),
             (re.compile(r"2>>"), ShellTokenType.REDIRECT_APPEND_ERR),
             (re.compile(r"&>"), ShellTokenType.REDIRECT_STDOUT_ERR),
@@ -62,16 +60,12 @@ class ShellLexer:
             (re.compile(r"<<"), ShellTokenType.REDIRECT_HEREDOC),
             (re.compile(r">>"), ShellTokenType.REDIRECT_APPEND),
             (re.compile(r"2>"), ShellTokenType.REDIRECT_STDERR),
-            # Operadores compuestos
             (re.compile(r"&&"), ShellTokenType.AND),
             (re.compile(r"\|\|"), ShellTokenType.OR),
-            # Strings entre comillas (con soporte para escapes)
             (re.compile(r"'((?:[^']|\\')*)'"), ShellTokenType.SINGLE_QUOTE_STRING),
             (re.compile(r'"((?:[^"]|\\")*)"'), ShellTokenType.DOUBLE_QUOTE_STRING),
-            # Variables
             (re.compile(r"\$\{[a-zA-Z_][a-zA-Z0-9_]*\}"), ShellTokenType.VARIABLE),
             (re.compile(r"\$[a-zA-Z_][a-zA-Z0-9_]*"), ShellTokenType.VARIABLE),
-            # Operadores y símbolos simples
             (re.compile(r"\|"), ShellTokenType.PIPE),
             (re.compile(r"<"), ShellTokenType.REDIRECT_IN),
             (re.compile(r">"), ShellTokenType.REDIRECT_STDOUT),
@@ -80,7 +74,6 @@ class ShellLexer:
             (re.compile(r"\("), ShellTokenType.SUBSHELL_START),
             (re.compile(r"\)"), ShellTokenType.SUBSHELL_END),
             (re.compile(r"="), ShellTokenType.ASSIGNMENT),
-            # Palabras (comandos y argumentos)
             (re.compile(r"[^|\s&;<>()=]+"), ShellTokenType.ARGUMENT),
         ]
 
@@ -90,7 +83,7 @@ class ShellLexer:
         length = len(input_text)
 
         while pos < length:
-            # Saltamos espacios en blanco
+
             if input_text[pos].isspace():
                 pos += 1
                 continue
@@ -102,14 +95,12 @@ class ShellLexer:
                 if match:
                     token_value = match.group()
 
-                    # Para strings, capturamos el contenido sin las comillas
                     if token_type in [
                         ShellTokenType.SINGLE_QUOTE_STRING,
                         ShellTokenType.DOUBLE_QUOTE_STRING,
                     ]:
                         token_value = match.group(1)
 
-                    # Determinar si es COMMAND o ARGUMENT
                     if token_type == ShellTokenType.ARGUMENT:
                         if not tokens or self._is_command_delimiter(tokens[-1]):
                             token_type = ShellTokenType.COMMAND
@@ -128,7 +119,7 @@ class ShellLexer:
         return tokens
 
     def _is_command_delimiter(self, token: ShellToken) -> bool:
-        # Delimitadores básicos
+
         basic_delimiters = [
             ShellTokenType.PIPE,
             ShellTokenType.SEMICOLON,
@@ -153,7 +144,6 @@ class ShellLexer:
             "builtin",
         ]
 
-        # Combinar las condiciones
         return token.token_type in basic_delimiters or (
             token.token_type == ShellTokenType.ARGUMENT
             and token.lex in command_indicators

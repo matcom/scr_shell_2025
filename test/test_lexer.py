@@ -2,7 +2,6 @@ def test_lexer():
     lexer = ShellLexer()
 
     test_cases = [
-        # Redirecciones básicas
         (
             "ls > file.txt",
             [
@@ -27,7 +26,6 @@ def test_lexer():
                 ("output.log", ShellTokenType.ARGUMENT),
             ],
         ),
-        # Redirecciones append
         (
             "ls >> file.txt",
             [
@@ -52,7 +50,6 @@ def test_lexer():
                 ("output.log", ShellTokenType.ARGUMENT),
             ],
         ),
-        # Redirecciones combinadas
         (
             "cmd >file 2> a.log",
             [
@@ -63,7 +60,6 @@ def test_lexer():
                 ("a.log", ShellTokenType.ARGUMENT),
             ],
         ),
-        # Heredoc y here-string
         (
             "cat << EOF\ncontent\nEOF",
             [
@@ -98,7 +94,7 @@ def test_lexer():
                 ("-exec", ShellTokenType.ARGUMENT),
                 ("gzip", ShellTokenType.COMMAND),
                 ("{}", ShellTokenType.ARGUMENT),
-                (";", ShellTokenType.SEMICOLON),  # El \ es interpretado como escape
+                (";", ShellTokenType.SEMICOLON),
                 ("2>>", ShellTokenType.REDIRECT_APPEND_ERR),
                 ("error.log", ShellTokenType.ARGUMENT),
                 ("|", ShellTokenType.PIPE),
