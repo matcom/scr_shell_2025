@@ -22,7 +22,7 @@ jobs:
         run: |
           chmod -R +x .
           rm -r tests/
-          cp -r tests/ .
+          cp -r environment/tests/ .
       - name: Test evaluation
         run: |
           ./tests/run_tests.sh
