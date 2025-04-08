@@ -242,6 +242,9 @@ class CommandExecutor:
 
     def execute(self, node):
         try:
+            if isinstance(node, (Command, Pipe, LogicalOp, Sequence)):
+                cmd_str = self._ast_to_string(node)
+                self.add_to_history(cmd_str)
             if isinstance(node, Command):
                 return self._execute_command(node)
             elif isinstance(node, Pipe):
@@ -257,6 +260,21 @@ class CommandExecutor:
             print(f"Error: {e}", file=sys.stderr)
             self.last_return_code = 1
             return 1
+
+    def _ast_to_string(self, node) -> str:
+        if isinstance(node, Command):
+            return " ".join(node.args)
+        elif isinstance(node, Pipe):
+            return (
+                f"{self._ast_to_string(node.left)} | {self._ast_to_string(node.right)}"
+            )
+        elif isinstance(node, LogicalOp):
+            return f"{self._ast_to_string(node.left)} {node.op} {self._ast_to_string(node.right)}"
+        elif isinstance(node, Sequence):
+            return (
+                f"{self._ast_to_string(node.left)} ; {self._ast_to_string(node.right)}"
+            )
+        return str(node)
 
     def _execute_command(self, cmd: Command):
         if not cmd.args:
@@ -338,38 +356,72 @@ class CommandExecutor:
         prev_stdout = None
 
         for i, cmd in enumerate(commands):
-            stdin = prev_stdout
-            stdout = subprocess.PIPE if i < len(commands) - 1 else None
-
-            redirects = cmd.redirects if i == 0 or i == len(commands) - 1 else []
-
-            p_stdin = self._get_redirected_stream("IN", redirects, fallback=stdin)
-            p_stdout = self._get_redirected_stream("OUT", redirects, fallback=stdout)
-            p_stderr = self._get_redirected_stream("ERR", redirects, fallback=None)
-
             try:
+                # Configurar stdin (salida del comando anterior o redirección)
+                stdin = prev_stdout
+
+                # Configurar stdout (pipe si no es el último comando)
+                stdout = subprocess.PIPE if i < len(commands) - 1 else None
+
+                # Configurar stderr (solo para el último comando)
+                stderr = None if i < len(commands) - 1 else subprocess.PIPE
+
+                # Solo aplicar redirecciones de archivo al primer y último comando
+                stdin_redir = None
+                stdout_redir = None
+                stderr_redir = None
+
+                if i == 0 or i == len(commands) - 1:
+                    for r_type, file in cmd.redirects:
+                        if r_type == "IN":
+                            stdin_redir = open(file, "r")
+                        elif r_type == "OUT":
+                            stdout_redir = open(file, "w")
+                        elif r_type == "APPEND":
+                            stdout_redir = open(file, "a")
+                        elif r_type == "ERR":
+                            stderr_redir = open(file, "w")
+
                 process = subprocess.Popen(
                     cmd.args,
-                    stdin=p_stdin,
-                    stdout=p_stdout,
-                    stderr=p_stderr,
+                    stdin=stdin_redir or stdin,
+                    stdout=stdout_redir or stdout,
+                    stderr=stderr_redir or stderr,
                     env=self.env,
+                    text=True,
+                    universal_newlines=True,
                 )
-            except FileNotFoundError:
+
+                processes.append(process)
+
+                # Cerrar el stdout del proceso anterior si no lo necesitamos más
+                if prev_stdout and prev_stdout != sys.stdin:
+                    prev_stdout.close()
+
+                # Guardar el stdout de este proceso para el siguiente
+                prev_stdout = process.stdout if i < len(commands) - 1 else None
+
+            except FileNotFoundError as e:
                 print(f"{cmd.args[0]}: comando no encontrado", file=sys.stderr)
+                # Cerrar todos los file descriptors abiertos
+                for p in processes:
+                    if p.stdout and p.stdout != sys.stdout:
+                        p.stdout.close()
                 return 127
 
-            processes.append(process)
-
-            if p_stdin and p_stdin != stdin and p_stdin != sys.stdin:
-                p_stdin.close()
-
-            prev_stdout = process.stdout
-
+        # Esperar a que todos los procesos terminen
         for p in processes:
             p.wait()
 
+        # El código de retorno es del último proceso
         self.last_return_code = processes[-1].returncode
+
+        # Mostrar salida del último proceso si no fue redirigida
+        if processes[-1].stdout and processes[-1].stdout != sys.stdout:
+            output = processes[-1].stdout.read()
+            if output:
+                print(output, end="")
+
         return self.last_return_code
 
     def _get_redirected_stream(self, kind, redirects, fallback):
@@ -421,16 +473,28 @@ class CommandExecutor:
             print("fg: no hay trabajos", file=sys.stderr)
             return 1
 
-        job_id = max(self.jobs.keys()) if not args else int(args[0].lstrip("%"))
-        job = self.jobs.get(job_id)
+        try:
+            job_id = max(self.jobs.keys()) if not args else int(args[0].lstrip("%"))
+        except ValueError:
+            print("fg: argumento debe ser un ID de trabajo", file=sys.stderr)
+            return 1
 
+        job = self.jobs.get(job_id)
         if not job:
             print(f"fg: {job_id}: no existe ese trabajo", file=sys.stderr)
             return 1
 
         try:
+            os.setpgid(job.pid, os.getpgid(0))
             os.kill(job.pid, signal.SIGCONT)
-            os.waitpid(job.pid, 0)
+
+            _, status = os.waitpid(job.pid, 0)
+
+            if os.WIFEXITED(status):
+                job.status = f"terminated ({os.WEXITSTATUS(status)})"
+            elif os.WIFSIGNALED(status):
+                job.status = f"killed ({os.WTERMSIG(status)})"
+
             del self.jobs[job_id]
             return 0
         except ProcessLookupError:
@@ -461,13 +525,21 @@ class CommandExecutor:
             return 1
 
     def _builtin_history(self, args: Optional[List[str]]) -> int:
-        for i, cmd in enumerate(self.history, 1):
+        limit = None
+        if args and args[0].isdigit():
+            limit = int(args[0])
+
+        for i, cmd in enumerate(self.history[-limit:] if limit else self.history, 1):
             print(f"{i:4}  {cmd}")
         return 0
 
     def add_to_history(self, command: str):
         command = command.strip()
-        if command and (not self.history or command != self.history[-1]):
+        if (
+            command
+            and not command.startswith(" ")
+            and (not self.history or command != self.history[-1])
+        ):
             self.history.append(command)
 
     def get_history_command(self, arg: str) -> Optional[str]:
@@ -493,10 +565,26 @@ def main_loop():
     while True:
         try:
             cwd = os.getcwd()
-            prompt = f"\033[1;32m$PWD\033[0m$ "
+            prompt = f"\033[1;32m{cwd}\033[0m$ "
             line = input(prompt).strip()
+
+            # Manejar comandos de historial antes de procesar
+            if line.startswith("!"):
+                history_cmd = executor.get_history_command(line)
+                if history_cmd:
+                    print(f"Ejecutando: {history_cmd}")
+                    line = history_cmd
+                else:
+                    print(
+                        f"Comando no encontrado en historial: {line}", file=sys.stderr
+                    )
+                    continue
+
             if not line:
                 continue
+
+            if not line.startswith(" "):
+                executor.add_to_history(line)
 
             lexer = ShellLexer()
             tokens = lexer.tokenize(line)
