@@ -101,28 +101,23 @@ class ShellParser:
         self.pos = 0
 
     def parse(self):
-        """Parsea el comando y aplica & al pipeline completo."""
         cmd = self.parse_pipe()
 
-        # Si hay un & al final, lo aplicamos a TODO el pipeline
         if self.peek() == "&":
             self.consume("&")
             if isinstance(cmd, Command):
                 cmd.background = True
             elif isinstance(cmd, Pipe):
-                # Marcamos todo el pipeline como background
                 self._mark_pipe_background(cmd)
         return cmd
 
     def _mark_pipe_background(self, pipe_node):
-        """Marca todo el pipeline como background."""
         if isinstance(pipe_node.right, Pipe):
             self._mark_pipe_background(pipe_node.right)
         else:
             pipe_node.right.background = True
 
     def parse_pipe(self):
-        """Maneja pipes (|)."""
         left = self.parse_redirect()
 
         while self.peek() == "|":
@@ -133,7 +128,6 @@ class ShellParser:
         return left
 
     def parse_redirect(self) -> Command:
-        """Maneja redirecciones (<, >, >>)."""
         args = []
         redirects = []
 
@@ -152,7 +146,7 @@ class ShellParser:
                 self.consume(">>")
                 file = self.consume_any()
                 redirects.append(("APPEND", file))
-            elif token in ("|", "&"):  # Cortar si encontramos un pipe o &
+            elif token in ("|", "&"):
                 break
             else:
                 args.append(self.consume_any())
@@ -203,8 +197,17 @@ class CommandExecutor:
                 for job_id, job in list(self.jobs.items()):
                     if job.pid == pid:
                         if os.WIFEXITED(status):
+                            print(f"[{job_id}]    done       {job.cmd}")
                             del self.jobs[job_id]
+                            print("$: ", end="")
                         elif os.WIFSIGNALED(status):
+                            sig = os.WTERMSIG(status)
+                            if sig == signal.SIGINT:
+                                print(f"\n[{job_id}]    interrupted    {job.cmd}")
+                            else:
+                                print(
+                                    f"\n[{job_id}]    terminated by signal {sig}    {job.cmd}"
+                                )
                             del self.jobs[job_id]
                         elif os.WIFSTOPPED(status):
                             job.status = "stopped"
@@ -215,6 +218,7 @@ class CommandExecutor:
             try:
                 os.kill(job.pid, 0)
             except ProcessLookupError:
+                print(f"[{job_id}]    terminated    {job.cmd}")
                 del self.jobs[job_id]
 
     def execute(self, node):
@@ -230,7 +234,7 @@ class CommandExecutor:
             else:
                 raise ValueError(f"Unknown node type: {type(node)}")
         except Exception as e:
-            print(f"Error: {e}", file=sys.stderr)
+            # print(f"Error: {e}", file=sys.stderr)
             self.last_return_code = 1
             return 1
 
@@ -304,9 +308,9 @@ class CommandExecutor:
                 args,
                 stdin=stdin or sys.stdin,
                 stdout=stdout or sys.stdout,
-                stderr=sys.stderr,
+                stderr=stderr or sys.stderr,
                 env=self.env,
-                preexec_fn=os.setsid if background else None,
+                preexec_fn=os.setsid,
                 universal_newlines=True,
             )
 
@@ -317,9 +321,15 @@ class CommandExecutor:
                 print(f"[{job_id}] {process.pid}")
                 return 0
             else:
-                process.wait()
-                self.last_return_code = process.returncode
-                return process.returncode
+                try:
+                    process.wait()
+                    self.last_return_code = process.returncode
+                    return process.returncode
+                except KeyboardInterrupt:
+                    os.killpg(os.getpgid(process.pid), signal.SIGINT)
+                    process.wait()
+                    self.last_return_code = 128 + signal.SIGINT
+                    return self.last_return_code
         except FileNotFoundError:
             print(f"{args[0]}: command not found", file=sys.stderr)
             return 127
@@ -335,12 +345,11 @@ class CommandExecutor:
         commands = []
         self._flatten_pipes(pipe_node, commands)
 
-        # Verificar si todo el pipeline debe ejecutarse en background
         background = False
         if commands and commands[-1].background:
             background = True
             for cmd in commands:
-                cmd.background = False  # Quitar el flag para procesar el pipe
+                cmd.background = False
 
         processes = []
         prev_stdout = None
@@ -373,7 +382,7 @@ class CommandExecutor:
                     stderr=stderr,
                     env=self.env,
                     universal_newlines=True,
-                    preexec_fn=os.setsid if background else None,
+                    preexec_fn=os.setsid,
                 )
 
                 processes.append(process)
@@ -396,10 +405,17 @@ class CommandExecutor:
             print(f"[{job_id}] {processes[-1].pid}")
             return 0
         else:
-            for p in processes:
-                p.wait()
-            self.last_return_code = processes[-1].returncode
-            return self.last_return_code
+            try:
+                for p in processes:
+                    p.wait()
+                self.last_return_code = processes[-1].returncode
+                return self.last_return_code
+            except KeyboardInterrupt:
+                for p in processes:
+                    os.killpg(os.getpgid(p.pid), signal.SIGINT)
+                    p.wait()
+                self.last_return_code = 128 + signal.SIGINT
+                return self.last_return_code
 
     def _flatten_pipes(self, node, result: List[Command]):
         if isinstance(node, Pipe):
@@ -452,15 +468,32 @@ class CommandExecutor:
                 return 1
 
             try:
+
+                def handle_sigint(signum, frame):
+                    os.killpg(os.getpgid(job.pid), signal.SIGINT)
+
+                original_sigint = signal.signal(signal.SIGINT, handle_sigint)
+
                 os.kill(job.pid, signal.SIGCONT)
+
                 _, status = os.waitpid(job.pid, 0)
 
-                if os.WIFEXITED(status) or os.WIFSIGNALED(status):
+                signal.signal(signal.SIGINT, original_sigint)
+
+                if os.WIFEXITED(status):
+                    print(f"[{job_id}]    done       {job.cmd}")
+                    del self.jobs[job_id]
+                elif os.WIFSIGNALED(status):
+                    sig = os.WTERMSIG(status)
+                    if sig == signal.SIGINT:
+                        print(f"[{job_id}]    interrupted    {job.cmd}")
+                    else:
+                        print(f"[{job_id}]    terminated by signal {sig}    {job.cmd}")
                     del self.jobs[job_id]
                 elif os.WIFSTOPPED(status):
                     job.status = "stopped"
-
                 return 0
+
             except ProcessLookupError:
                 print(f"fg: job {job_id} has terminated", file=sys.stderr)
                 del self.jobs[job_id]
@@ -584,6 +617,9 @@ def main_loop() -> None:
                 parser = ShellParser(tokens)
                 ast = parser.parse()
                 executor.execute(ast)
+            except KeyboardInterrupt:
+                print()
+                continue
             except Exception as e:
                 print(f"Error: {e}", file=sys.stderr)
                 executor.last_return_code = 1

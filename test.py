@@ -12,7 +12,7 @@ from contextlib import redirect_stdout, redirect_stderr
 class TestCustomShell(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Crear archivos temporales para pruebas de redirección
+
         cls.temp_dir = tempfile.TemporaryDirectory()
         cls.test_file1 = os.path.join(cls.temp_dir.name, "test1.txt")
         cls.test_file2 = os.path.join(cls.temp_dir.name, "test2.txt")
@@ -21,7 +21,6 @@ class TestCustomShell(unittest.TestCase):
         with open(cls.test_file1, "w") as f:
             f.write("line1\nline2\nline3\n")
 
-        # Variable de entorno para el ejecutable del shell
         cls.shell_path = os.path.abspath("./shell.py")
 
     @classmethod
