@@ -67,31 +67,29 @@ class ShellLexer:
         while i < len(line):
             char = line[i]
 
-            if char in ('"', "'") and not self.in_quote:
-                self.in_quote = True
-                self.quote_char = char
-                i += 1
-                continue
-            elif char == self.quote_char and self.in_quote:
-                self.in_quote = False
-                self.add_token()
-                self.quote_char = ""
-                i += 1
-                continue
-            elif self.in_quote:
+            if char in ('"', "'"):
+                if not self.in_quote:
+                    self.in_quote = True
+                    self.quote_char = char
+                    i += 1
+                    continue
+                elif char == self.quote_char:
+                    self.in_quote = False
+                    self.add_token()
+                    self.quote_char = ""
+                    i += 1
+                    continue
+
+            if self.in_quote:
                 self.current_token += char
                 i += 1
                 continue
 
-            if char in ("|", "&", ";", "<", ">"):
+            if char in ("|", "<", ">", "&"):
                 self.add_token()
 
-                if (
-                    i + 1 < len(line)
-                    and line[i + 1] == char
-                    and char in (">", "&", "|")
-                ):
-                    self.tokens.append(char * 2)
+                if char == ">" and i + 1 < len(line) and line[i + 1] == ">":
+                    self.tokens.append(">>")
                     i += 2
                     continue
 
@@ -122,39 +120,19 @@ class ShellParser:
         self.pos = 0
 
     def parse(self):
-        return self.parse_sequence()
-
-    def parse_sequence(self):
-        left = self.parse_logical()
-
-        while self.peek() == ";":
-            self.consume(";")
-            right = self.parse_logical()
-            left = Sequence(left, right)
-
-        return left
-
-    def parse_logical(self):
-        left = self.parse_pipe()
-
-        while self.peek() in ("&&", "||"):
-            op = self.consume(self.peek())
-            right = self.parse_pipe()
-            left = LogicalOp(left, op, right)
-
-        return left
+        return self.parse_pipe()
 
     def parse_pipe(self):
-        left = self.parse_command()
+        left = self.parse_redirect()
 
         while self.peek() == "|":
             self.consume("|")
-            right = self.parse_command()
+            right = self.parse_redirect()
             left = Pipe(left, right)
 
         return left
 
-    def parse_command(self) -> Command:
+    def parse_redirect(self) -> Command:
         args = []
         redirects = []
         background = False
@@ -168,20 +146,17 @@ class ShellParser:
                 redirects.append(("IN", file))
             elif token == ">":
                 self.consume(">")
-                if self.peek() == ">":
-                    self.consume(">>")
-                    file = self.consume_any()
-                    redirects.append(("APPEND", file))
-                else:
-                    file = self.consume_any()
-                    redirects.append(("OUT", file))
+                file = self.consume_any()
+                redirects.append(("OUT", file))
+            elif token == ">>":
+                self.consume(">>")
+                file = self.consume_any()
+                redirects.append(("APPEND", file))
             elif token == "&":
                 self.consume("&")
-                if not args:
-                    continue
                 background = True
                 break
-            elif token == ";" or token == "|" or token in ("&&", "||"):
+            elif token == "|":
                 break
             else:
                 args.append(self.consume_any())
@@ -219,6 +194,7 @@ class CommandExecutor:
         self.jobs: Dict[int, Job] = {}
         self.current_job_id = 1
         self.history: Deque[str] = deque(maxlen=50)
+        self.alias: Dict[str, str] = {}
         signal.signal(signal.SIGCHLD, self._handle_sigchld)
 
     def _handle_sigchld(self, signum, frame):
@@ -551,7 +527,7 @@ class CommandExecutor:
             print(f"{i:4}  {cmd}")
         return 0
 
-    def add_to_history(self, command: str):
+    def add_to_history(self, command: str) -> None:
         if command.startswith(" "):
             return
 
@@ -559,6 +535,9 @@ class CommandExecutor:
         if command:
             if not self.history or command != self.history[-1]:
                 self.history.append(command)
+                cmd_base = command.split()[0]
+                if cmd_base not in self.alias:
+                    self.alias[cmd_base] = command
 
     def get_history_command(self, arg: str) -> Optional[str]:
         if not arg:
@@ -568,25 +547,33 @@ class CommandExecutor:
             return self.history[-1] if self.history else None
 
         if arg.startswith("!"):
-            try:
+            if arg[1:].isdigit():
                 index = int(arg[1:]) - 1
                 if 0 <= index < len(self.history):
                     return self.history[index]
-            except ValueError:
-                prefix = arg[1:]
-                for cmd in reversed(self.history):
-                    if cmd.startswith(prefix):
-                        return cmd
+                return None
+
+            cmd_prefix = arg[1:]
+
+            if cmd_prefix in self.alias:
+                return self.alias[cmd_prefix]
+
+            for cmd in reversed(self.history):
+                if cmd.startswith(cmd_prefix):
+
+                    self.alias[cmd_prefix] = cmd
+                    return cmd
+
         return None
 
 
-def main_loop():
+def main_loop() -> None:
     executor = CommandExecutor()
 
     while True:
         try:
             cwd = os.getcwd()
-            prompt = f"\033[1;32m{cwd}\033[0m$ "
+            prompt = f"\033[1;32m$\033[0m "
 
             try:
                 line = input(prompt)
@@ -617,7 +604,7 @@ def main_loop():
 
                 parser = ShellParser(tokens)
                 ast = parser.parse()
-
+                # print(ast)
                 executor.execute(ast)
             except Exception as e:
                 print(f"Error: {e}", file=sys.stderr)
