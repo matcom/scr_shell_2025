@@ -249,7 +249,7 @@ class CommandExecutor:
         try:
             if isinstance(node, (Command, Pipe, LogicalOp, Sequence)):
                 cmd_str = self._ast_to_string(node)
-                self.add_to_history(cmd_str)
+                # self.add_to_history(cmd_str)
 
             if isinstance(node, Command):
                 return self._execute_command(node)
@@ -552,8 +552,11 @@ class CommandExecutor:
         return 0
 
     def add_to_history(self, command: str):
+        if command.startswith(" "):
+            return
+
         command = command.strip()
-        if command and not command.startswith(" "):
+        if command:
             if not self.history or command != self.history[-1]:
                 self.history.append(command)
 
@@ -586,7 +589,7 @@ def main_loop():
             prompt = f"\033[1;32m{cwd}\033[0m$ "
 
             try:
-                line = input(prompt).strip()
+                line = input(prompt)
             except EOFError:
                 print()
                 break
@@ -606,8 +609,7 @@ def main_loop():
                     print(f"Command not found in history: {line}", file=sys.stderr)
                     continue
 
-            if not line.startswith(" "):
-                executor.add_to_history(line)
+            executor.add_to_history(line)
 
             try:
                 lexer = ShellLexer()
