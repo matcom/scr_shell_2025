@@ -4,7 +4,7 @@ import sys
 import subprocess
 import signal
 from collections import deque
-from typing import List, Dict, Optional, Tuple, Deque, Union
+from typing import List, Dict, Optional, Tuple, Deque
 
 
 class Command:
@@ -29,25 +29,6 @@ class Pipe:
 
     def __repr__(self):
         return f"Pipe({self.left}, {self.right})"
-
-
-class LogicalOp:
-    def __init__(self, left, op: str, right):
-        self.left = left
-        self.op = op
-        self.right = right
-
-    def __repr__(self):
-        return f"LogicalOp({self.left}, '{self.op}', {self.right})"
-
-
-class Sequence:
-    def __init__(self, left, right):
-        self.left = left
-        self.right = right
-
-    def __repr__(self):
-        return f"Sequence({self.left}, {self.right})"
 
 
 class ShellLexer:
@@ -120,9 +101,28 @@ class ShellParser:
         self.pos = 0
 
     def parse(self):
-        return self.parse_pipe()
+        """Parsea el comando y aplica & al pipeline completo."""
+        cmd = self.parse_pipe()
+
+        # Si hay un & al final, lo aplicamos a TODO el pipeline
+        if self.peek() == "&":
+            self.consume("&")
+            if isinstance(cmd, Command):
+                cmd.background = True
+            elif isinstance(cmd, Pipe):
+                # Marcamos todo el pipeline como background
+                self._mark_pipe_background(cmd)
+        return cmd
+
+    def _mark_pipe_background(self, pipe_node):
+        """Marca todo el pipeline como background."""
+        if isinstance(pipe_node.right, Pipe):
+            self._mark_pipe_background(pipe_node.right)
+        else:
+            pipe_node.right.background = True
 
     def parse_pipe(self):
+        """Maneja pipes (|)."""
         left = self.parse_redirect()
 
         while self.peek() == "|":
@@ -133,9 +133,9 @@ class ShellParser:
         return left
 
     def parse_redirect(self) -> Command:
+        """Maneja redirecciones (<, >, >>)."""
         args = []
         redirects = []
-        background = False
 
         while self.pos < len(self.tokens):
             token = self.peek()
@@ -152,16 +152,12 @@ class ShellParser:
                 self.consume(">>")
                 file = self.consume_any()
                 redirects.append(("APPEND", file))
-            elif token == "&":
-                self.consume("&")
-                background = True
-                break
-            elif token == "|":
+            elif token in ("|", "&"):  # Cortar si encontramos un pipe o &
                 break
             else:
                 args.append(self.consume_any())
 
-        return Command(args, redirects, background)
+        return Command(args, redirects, False)
 
     def peek(self) -> str:
         return self.tokens[self.pos] if self.pos < len(self.tokens) else ""
@@ -223,7 +219,7 @@ class CommandExecutor:
 
     def execute(self, node):
         try:
-            if isinstance(node, (Command, Pipe, LogicalOp, Sequence)):
+            if isinstance(node, (Command, Pipe)):
                 cmd_str = self._ast_to_string(node)
                 # self.add_to_history(cmd_str)
 
@@ -231,15 +227,10 @@ class CommandExecutor:
                 return self._execute_command(node)
             elif isinstance(node, Pipe):
                 return self._execute_pipe(node)
-            elif isinstance(node, LogicalOp):
-                return self._execute_logical(node)
-            elif isinstance(node, Sequence):
-                self.execute(node.left)
-                return self.execute(node.right)
             else:
                 raise ValueError(f"Unknown node type: {type(node)}")
         except Exception as e:
-            # print(f"Error: {e}", file=sys.stderr)
+            print(f"Error: {e}", file=sys.stderr)
             self.last_return_code = 1
             return 1
 
@@ -267,12 +258,6 @@ class CommandExecutor:
         elif isinstance(node, Pipe):
             return (
                 f"{self._ast_to_string(node.left)} | {self._ast_to_string(node.right)}"
-            )
-        elif isinstance(node, LogicalOp):
-            return f"{self._ast_to_string(node.left)} {node.op} {self._ast_to_string(node.right)}"
-        elif isinstance(node, Sequence):
-            return (
-                f"{self._ast_to_string(node.left)} ; {self._ast_to_string(node.right)}"
             )
         return str(node)
 
@@ -315,16 +300,13 @@ class CommandExecutor:
                 return 1
 
         try:
-
-            stderr = stderr or subprocess.PIPE if background else None
-
             process = subprocess.Popen(
                 args,
                 stdin=stdin or sys.stdin,
-                stdout=stdout or (subprocess.PIPE if background else sys.stdout),
-                stderr=stderr,
+                stdout=stdout or sys.stdout,
+                stderr=sys.stderr,
                 env=self.env,
-                preexec_fn=os.setsid,
+                preexec_fn=os.setsid if background else None,
                 universal_newlines=True,
             )
 
@@ -346,19 +328,25 @@ class CommandExecutor:
             return 1
         finally:
             for f in [stdin, stdout]:
-                if f and f not in [sys.stdin, sys.stdout]:
+                if f and f not in [sys.stdin, sys.stdout, sys.stderr]:
                     f.close()
 
     def _execute_pipe(self, pipe_node: Pipe) -> int:
         commands = []
         self._flatten_pipes(pipe_node, commands)
 
+        # Verificar si todo el pipeline debe ejecutarse en background
+        background = False
+        if commands and commands[-1].background:
+            background = True
+            for cmd in commands:
+                cmd.background = False  # Quitar el flag para procesar el pipe
+
         processes = []
         prev_stdout = None
 
         for i, cmd in enumerate(commands):
             try:
-
                 stdin = prev_stdout
                 stdout = subprocess.PIPE if i < len(commands) - 1 else None
                 stderr = None
@@ -385,7 +373,7 @@ class CommandExecutor:
                     stderr=stderr,
                     env=self.env,
                     universal_newlines=True,
-                    shell=False,
+                    preexec_fn=os.setsid if background else None,
                 )
 
                 processes.append(process)
@@ -401,11 +389,17 @@ class CommandExecutor:
                     p.terminate()
                 return 127
 
-        for p in processes:
-            p.wait()
-
-        self.last_return_code = processes[-1].returncode
-        return self.last_return_code
+        if background:
+            job_id = self.current_job_id
+            self.jobs[job_id] = Job(processes[-1].pid, self._ast_to_string(pipe_node))
+            self.current_job_id += 1
+            print(f"[{job_id}] {processes[-1].pid}")
+            return 0
+        else:
+            for p in processes:
+                p.wait()
+            self.last_return_code = processes[-1].returncode
+            return self.last_return_code
 
     def _flatten_pipes(self, node, result: List[Command]):
         if isinstance(node, Pipe):
@@ -415,16 +409,6 @@ class CommandExecutor:
             result.append(node)
         else:
             raise ValueError("Invalid node in pipe")
-
-    def _execute_logical(self, logical_node: LogicalOp) -> int:
-        left_code = self.execute(logical_node.left)
-
-        if logical_node.op == "&&" and left_code != 0:
-            return left_code
-        if logical_node.op == "||" and left_code == 0:
-            return left_code
-
-        return self.execute(logical_node.right)
 
     def _builtin_cd(self, args: List[str]) -> int:
         try:
@@ -468,7 +452,6 @@ class CommandExecutor:
                 return 1
 
             try:
-
                 os.kill(job.pid, signal.SIGCONT)
                 _, status = os.waitpid(job.pid, 0)
 
@@ -560,7 +543,6 @@ class CommandExecutor:
 
             for cmd in reversed(self.history):
                 if cmd.startswith(cmd_prefix):
-
                     self.alias[cmd_prefix] = cmd
                     return cmd
 
@@ -572,9 +554,7 @@ def main_loop() -> None:
 
     while True:
         try:
-            cwd = os.getcwd()
-            prompt = f"\033[1;32m$\033[0m "
-
+            prompt = "$ "
             try:
                 line = input(prompt)
             except EOFError:
@@ -590,7 +570,6 @@ def main_loop() -> None:
             if line.startswith("!"):
                 history_cmd = executor.get_history_command(line)
                 if history_cmd:
-                    print(f"Executing: {history_cmd}")
                     line = history_cmd
                 else:
                     print(f"Command not found in history: {line}", file=sys.stderr)
@@ -604,7 +583,6 @@ def main_loop() -> None:
 
                 parser = ShellParser(tokens)
                 ast = parser.parse()
-                # print(ast)
                 executor.execute(ast)
             except Exception as e:
                 print(f"Error: {e}", file=sys.stderr)
