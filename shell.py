@@ -6,6 +6,14 @@ import signal
 from collections import deque
 from typing import List, Dict, Optional, Tuple, Deque
 
+COLORS = {
+    "RESET": "\033[0m",
+    "RED": "\033[91m",
+    "GREEN": "\033[92m",
+    "MAGENTA": "\033[95m",
+    "CYAN": "\033[96m",
+}
+
 
 class Command:
     def __init__(
@@ -197,9 +205,11 @@ class CommandExecutor:
                 for job_id, job in list(self.jobs.items()):
                     if job.pid == pid:
                         if os.WIFEXITED(status):
-                            print(f"[{job_id}]    done       {job.cmd}")
+                            print(
+                                f"{COLORS['GREEN']}[{job_id}]    done       {job.cmd}{COLORS['RESET']}"
+                            )
                             del self.jobs[job_id]
-                            print("$: ", end="")
+                            print(f"{COLORS['GREEN']}$:{COLORS['RESET']} ", end="")
                         elif os.WIFSIGNALED(status):
                             sig = os.WTERMSIG(status)
                             if sig == signal.SIGINT:
@@ -218,14 +228,16 @@ class CommandExecutor:
             try:
                 os.kill(job.pid, 0)
             except ProcessLookupError:
-                print(f"[{job_id}]    terminated    {job.cmd}")
+                print(
+                    f"{COLORS['GREEN']}[{job_id}]    terminated    {job.cmd}{COLORS['RESET']}",
+                    flush=True,
+                )
                 del self.jobs[job_id]
 
     def execute(self, node):
         try:
             if isinstance(node, (Command, Pipe)):
                 cmd_str = self._ast_to_string(node)
-                # self.add_to_history(cmd_str)
 
             if isinstance(node, Command):
                 return self._execute_command(node)
@@ -234,7 +246,6 @@ class CommandExecutor:
             else:
                 raise ValueError(f"Unknown node type: {type(node)}")
         except Exception as e:
-            # print(f"Error: {e}", file=sys.stderr)
             self.last_return_code = 1
             return 1
 
@@ -300,7 +311,11 @@ class CommandExecutor:
                 elif r_type == "APPEND":
                     stdout = open(filename, "a")
             except IOError as e:
-                print(f"Cannot open file: {e}", file=sys.stderr)
+                print(
+                    f"{COLORS['RED']}Cannot open file: {e}{COLORS['RESET']}",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 return 1
 
         try:
@@ -318,7 +333,10 @@ class CommandExecutor:
                 job_id = self.current_job_id
                 self.jobs[job_id] = Job(process.pid, " ".join(args))
                 self.current_job_id += 1
-                print(f"[{job_id}] {process.pid}")
+                print(
+                    f"{COLORS['CYAN']}[{job_id}] {process.pid}{COLORS['RESET']}",
+                    flush=True,
+                )
                 return 0
             else:
                 try:
@@ -331,10 +349,18 @@ class CommandExecutor:
                     self.last_return_code = 128 + signal.SIGINT
                     return self.last_return_code
         except FileNotFoundError:
-            print(f"{args[0]}: command not found", file=sys.stderr)
+            print(
+                f"{COLORS['RED']}{args[0]}: command not found{COLORS['RESET']}",
+                file=sys.stderr,
+                flush=True,
+            )
             return 127
         except Exception as e:
-            print(f"Error executing command: {e}", file=sys.stderr)
+            print(
+                f"{COLORS["RED"]}Error executing command: {e}{COLORS['RESET']}",
+                file=sys.stderr,
+                flush=True,
+            )
             return 1
         finally:
             for f in [stdin, stdout]:
@@ -372,7 +398,11 @@ class CommandExecutor:
                         elif r_type == "APPEND" and i == len(commands) - 1:
                             stdout_redir = open(filename, "a")
                     except IOError as e:
-                        print(f"Cannot open file: {e}", file=sys.stderr)
+                        print(
+                            f"{COLORS['RED']}Cannot open file: {e}{COLORS["RESET"]}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
                         return 1
 
                 process = subprocess.Popen(
@@ -393,7 +423,11 @@ class CommandExecutor:
                 prev_stdout = process.stdout if i < len(commands) - 1 else None
 
             except FileNotFoundError:
-                print(f"{cmd.args[0]}: command not found", file=sys.stderr)
+                print(
+                    f"{COLORS['RED']}{cmd.args[0]}: command not found {COLORS['RESET']}",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 for p in processes:
                     p.terminate()
                 return 127
@@ -402,7 +436,10 @@ class CommandExecutor:
             job_id = self.current_job_id
             self.jobs[job_id] = Job(processes[-1].pid, self._ast_to_string(pipe_node))
             self.current_job_id += 1
-            print(f"[{job_id}] {processes[-1].pid}")
+            print(
+                f"{COLORS['CYAN']}[{job_id}] {processes[-1].pid}{COLORS['RESET']}",
+                flush=True,
+            )
             return 0
         else:
             try:
@@ -436,7 +473,9 @@ class CommandExecutor:
             os.chdir(new_dir)
             return 0
         except Exception as e:
-            print(f"cd: {e}", file=sys.stderr)
+            print(
+                f"{COLORS['RED']}cd: {e}{COLORS['RESET']}", file=sys.stderr, flush=True
+            )
             return 1
 
     def _builtin_jobs(self) -> int:
@@ -445,12 +484,19 @@ class CommandExecutor:
             return 0
 
         for job_id, job in self.jobs.items():
-            print(f"[{job_id}] {job.pid} {job.status} {job.cmd}")
+            print(
+                f"{COLORS['CYAN']}[{job_id}] {job.pid} {job.status} {job.cmd}{COLORS['RESET']}",
+                flush=True,
+            )
         return 0
 
     def _builtin_fg(self, args: Optional[List[str]]) -> int:
         if not self.jobs:
-            print("fg: no current job", file=sys.stderr)
+            print(
+                f"{COLORS['MAGENTA']}fg: no current job{COLORS['RESET']}",
+                file=sys.stderr,
+                flush=True,
+            )
             return 1
 
         try:
@@ -464,7 +510,11 @@ class CommandExecutor:
 
             job = self.jobs.get(job_id)
             if not job:
-                print(f"fg: {job_id}: no such job", file=sys.stderr)
+                print(
+                    f"{COLORS['RED']}fg: {job_id}: no such job{COLORS['RESET']}",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 return 1
 
             try:
@@ -481,30 +531,51 @@ class CommandExecutor:
                 signal.signal(signal.SIGINT, original_sigint)
 
                 if os.WIFEXITED(status):
-                    print(f"[{job_id}]    done       {job.cmd}")
+                    print(
+                        f"{COLORS['GREEN']}[{job_id}]    done       {job.cmd}{COLORS["RESET"]}",
+                        flush=True,
+                    )
                     del self.jobs[job_id]
                 elif os.WIFSIGNALED(status):
                     sig = os.WTERMSIG(status)
                     if sig == signal.SIGINT:
-                        print(f"[{job_id}]    interrupted    {job.cmd}")
+                        print(
+                            f"{COLORS['MAGENTA']}[{job_id}]    interrupted    {job.cmd}{COLORS['RESET']}",
+                            flush=True,
+                        )
                     else:
-                        print(f"[{job_id}]    terminated by signal {sig}    {job.cmd}")
+                        print(
+                            f"{COLORS['RED']}[{job_id}]    terminated by signal {sig}    {job.cmd} {COLORS['RESET']}",
+                            flush=True,
+                        )
                     del self.jobs[job_id]
                 elif os.WIFSTOPPED(status):
                     job.status = "stopped"
                 return 0
 
             except ProcessLookupError:
-                print(f"fg: job {job_id} has terminated", file=sys.stderr)
+                print(
+                    f"{COLORS['MAGENTA']}fg: job {job_id} has terminated{COLORS['RESET']}",
+                    flush=True,
+                    file=sys.stderr,
+                )
                 del self.jobs[job_id]
                 return 1
         except ValueError:
-            print("fg: job ID must be a number", file=sys.stderr)
+            print(
+                f"{COLORS['RED']}fg: job ID must be a number{COLORS['RESET']}",
+                file=sys.stderr,
+                flush=True,
+            )
             return 1
 
     def _builtin_bg(self, args: Optional[List[str]]) -> int:
         if not self.jobs:
-            print("bg: no current job", file=sys.stderr)
+            print(
+                f"{COLORS['RED']}bg: no current job{COLORS['RESET']}",
+                flush=True,
+                file=sys.stderr,
+            )
             return 1
 
         try:
@@ -518,20 +589,35 @@ class CommandExecutor:
 
             job = self.jobs.get(job_id)
             if not job:
-                print(f"bg: {job_id}: no such job", file=sys.stderr)
+                print(
+                    f"{COLORS['RED']}bg: {job_id}: no such job{COLORS['RESET']}",
+                    flush=True,
+                    file=sys.stderr,
+                )
                 return 1
 
             try:
                 os.kill(job.pid, signal.SIGCONT)
                 job.status = "running"
-                print(f"[{job_id}] {job.pid} {job.cmd}")
+                print(
+                    f"{COLORS['CYAN']}[{job_id}] {job.pid} {job.cmd}{COLORS['RESET']}",
+                    flush=True,
+                )
                 return 0
             except ProcessLookupError:
-                print(f"bg: job {job_id} has terminated", file=sys.stderr)
+                print(
+                    f"{COLORS['CYAN']}bg: job {job_id} has terminated{COLORS["RESET"]}",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 del self.jobs[job_id]
                 return 1
         except ValueError:
-            print("bg: job ID must be a number", file=sys.stderr)
+            print(
+                f"{COLORS["RED"]}bg: job ID must be a number{COLORS["RESET"]}",
+                file=sys.stderr,
+                flush=True,
+            )
             return 1
 
     def _builtin_history(self, args: Optional[List[str]]) -> int:
@@ -540,7 +626,7 @@ class CommandExecutor:
             limit = min(int(args[0]), len(self.history))
 
         for i, cmd in enumerate(self.history[-limit:] if limit else self.history, 1):
-            print(f"{i:4}  {cmd}")
+            print(f"{COLORS['CYAN']}{i:4} {cmd}{COLORS['RESET']} ", flush=True)
         return 0
 
     def add_to_history(self, command: str) -> None:
@@ -587,7 +673,7 @@ def main_loop() -> None:
 
     while True:
         try:
-            prompt = "$ "
+            prompt = f"{COLORS['GREEN']}$:{COLORS["RESET"]} "
             try:
                 line = input(prompt)
             except EOFError:
@@ -605,7 +691,11 @@ def main_loop() -> None:
                 if history_cmd:
                     line = history_cmd
                 else:
-                    print(f"Command not found in history: {line}", file=sys.stderr)
+                    print(
+                        f"{COLORS['MAGENTA']}Command not found in history: {line} {COLORS['RESET']}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
                     continue
 
             executor.add_to_history(line)
@@ -621,11 +711,19 @@ def main_loop() -> None:
                 print()
                 continue
             except Exception as e:
-                print(f"Error: {e}", file=sys.stderr)
+                print(
+                    f"{COLORS['RED']}Error: {e} {COLORS["RESET"]}",
+                    flush=True,
+                    file=sys.stderr,
+                )
                 executor.last_return_code = 1
 
         except Exception as e:
-            print(f"Unexpected error: {e}", file=sys.stderr)
+            print(
+                f"{COLORS["RED"]}Unexpected error: {e} {COLORS["RESET"]}",
+                file=sys.stderr,
+                flush=True,
+            )
             executor.last_return_code = 1
 
 
