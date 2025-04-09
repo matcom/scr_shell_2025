@@ -21,26 +21,26 @@ class Command:
         args: List[str],
         redirects: List[Tuple[str, str]] = None,
         background: bool = False,
-    ):
+    ) -> None:
         self.args = args
         self.redirects = redirects if redirects else []
         self.background = background
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Command({self.args}, {self.redirects}, {self.background})"
 
 
 class Pipe:
-    def __init__(self, left, right):
+    def __init__(self, left, right) -> None:
         self.left = left
         self.right = right
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Pipe({self.left}, {self.right})"
 
 
 class ShellLexer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.tokens = []
         self.current_token = ""
         self.in_quote = False
@@ -104,11 +104,11 @@ class ShellLexer:
 
 
 class ShellParser:
-    def __init__(self, tokens: List[str]):
+    def __init__(self, tokens: List[str]) -> None:
         self.tokens = tokens
         self.pos = 0
 
-    def parse(self):
+    def parse(self) -> Command:
         cmd = self.parse_pipe()
 
         if self.peek() == "&":
@@ -119,13 +119,13 @@ class ShellParser:
                 self._mark_pipe_background(cmd)
         return cmd
 
-    def _mark_pipe_background(self, pipe_node):
+    def _mark_pipe_background(self, pipe_node) -> None:
         if isinstance(pipe_node.right, Pipe):
             self._mark_pipe_background(pipe_node.right)
         else:
             pipe_node.right.background = True
 
-    def parse_pipe(self):
+    def parse_pipe(self) -> Command:
         left = self.parse_redirect()
 
         while self.peek() == "|":
@@ -179,14 +179,14 @@ class ShellParser:
 
 
 class Job:
-    def __init__(self, pid: int, cmd: str, status: str = "running"):
+    def __init__(self, pid: int, cmd: str, status: str = "running") -> None:
         self.pid = pid
         self.cmd = cmd
         self.status = status
 
 
 class CommandExecutor:
-    def __init__(self):
+    def __init__(self) -> None:
         self.env = os.environ.copy()
         self.last_return_code = 0
         self.jobs: Dict[int, Job] = {}
@@ -195,7 +195,7 @@ class CommandExecutor:
         self.alias: Dict[str, str] = {}
         signal.signal(signal.SIGCHLD, self._handle_sigchld)
 
-    def _handle_sigchld(self, signum, frame):
+    def _handle_sigchld(self, signum, frame) -> None:
         while True:
             try:
                 pid, status = os.waitpid(-1, os.WNOHANG)
@@ -234,7 +234,7 @@ class CommandExecutor:
                 )
                 del self.jobs[job_id]
 
-    def execute(self, node):
+    def execute(self, node) -> int:
         try:
             if isinstance(node, (Command, Pipe)):
                 cmd_str = self._ast_to_string(node)
@@ -454,7 +454,7 @@ class CommandExecutor:
                 self.last_return_code = 128 + signal.SIGINT
                 return self.last_return_code
 
-    def _flatten_pipes(self, node, result: List[Command]):
+    def _flatten_pipes(self, node, result: List[Command]) -> None:
         if isinstance(node, Pipe):
             self._flatten_pipes(node.left, result)
             self._flatten_pipes(node.right, result)
