@@ -464,13 +464,29 @@ class CommandExecutor:
             raise ValueError("Invalid node in pipe")
 
     def _builtin_cd(self, args: List[str]) -> int:
+
         try:
             if not args:
                 new_dir = os.path.expanduser("~")
+            elif args[0] == "-":
+
+                if not hasattr(self, "_prev_dir"):
+                    print(
+                        f"{COLORS['RED']}cd: no previous directory{COLORS['RESET']}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    return 1
+                new_dir = self._prev_dir
+                print(f"move to => {COLORS['GREEN']}{new_dir}{COLORS['RESET']}")
             else:
                 new_dir = args[0]
 
+            current_dir = os.getcwd()
             os.chdir(new_dir)
+
+            self._prev_dir = current_dir
+
             return 0
         except Exception as e:
             print(
