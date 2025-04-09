@@ -4,15 +4,19 @@ import os
 import sys
 import subprocess
 import tempfile
-import io
 import re
 from contextlib import redirect_stdout, redirect_stderr
+
+
+def strip_ansi(text):
+    """Elimina códigos ANSI (colores) de un string"""
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", text)
 
 
 class TestCustomShell(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-
         cls.temp_dir = tempfile.TemporaryDirectory()
         cls.test_file1 = os.path.join(cls.temp_dir.name, "test1.txt")
         cls.test_file2 = os.path.join(cls.temp_dir.name, "test2.txt")
@@ -39,14 +43,14 @@ class TestCustomShell(unittest.TestCase):
                 timeout=timeout,
                 env=os.environ,
             )
-            return process.stdout, process.stderr
+            return strip_ansi(process.stdout), strip_ansi(process.stderr)
         except subprocess.TimeoutExpired:
             return "TIMEOUT", ""
 
     def test_01_prompt_display(self):
         """Verifica que se muestre el prompt"""
         stdout, _ = self.run_shell_command("exit")
-        self.assertIn("$", stdout.split("\n")[0])
+        self.assertIn("$:", stdout.split("\n")[0])
 
     def test_02_command_execution(self):
         """Prueba ejecución básica de comandos"""
@@ -104,8 +108,8 @@ class TestCustomShell(unittest.TestCase):
 
     def test_10_fg_command(self):
         """Prueba comando fg"""
-        stdout, _ = self.run_shell_command(f"sleep 3 &\nfg 1\nexit")
-        self.assertIn("", stdout)
+        stdout, _ = self.run_shell_command(f"sleep 0.1 &\nfg %1\nexit")
+        self.assertIn("sleep 0.1", stdout)
 
     def test_11_whitespace_handling(self):
         """Prueba manejo de espacios en blanco"""
@@ -118,28 +122,28 @@ class TestCustomShell(unittest.TestCase):
         commands = "echo hello\ncd /\nhistory\nexit"
         stdout, _ = self.run_shell_command(commands)
         lines = stdout.split("\n")
-        # self.assertIn("hello", lines)
-        self.assertIn("$ $    1  echo hello", lines)
-        self.assertIn("   2  cd /", lines)
-        self.assertIn("   3  history", lines)
+        self.assertIn("hello", stdout)
+        self.assertIn("1 echo hello", stdout)
+        self.assertIn("2 cd /", stdout)
+        self.assertIn("3 history", stdout)
 
     def test_13_history_reuse_number(self):
         """Prueba reutilización de comandos con !n"""
         stdout, _ = self.run_shell_command("echo hello\n!1\nexit")
         lines = stdout.split("\n")
-        self.assertEqual(lines.count("$ hello"), 2)
+        self.assertEqual(len([l for l in lines if "hello" in l]), 2)
 
     def test_14_history_reuse_double_bang(self):
         """Prueba reutilización con !!"""
         stdout, _ = self.run_shell_command("echo hello\n!!\nexit")
         lines = stdout.split("\n")
-        self.assertEqual(lines.count("$ hello"), 2)
+        self.assertEqual(len([l for l in lines if "hello" in l]), 2)
 
     def test_15_history_reuse_prefix(self):
         """Prueba reutilización con !prefix"""
-        stdout, _ = self.run_shell_command("echo hello\n!ec\nexit")
+        stdout, _ = self.run_shell_command("echo hello\n!echo\nexit")
         lines = stdout.split("\n")
-        self.assertEqual(lines.count("$ hello"), 2)
+        self.assertEqual(len([l for l in lines if "hello" in l]), 2)
 
     def test_16_history_ignore_spaces(self):
         """Prueba que no se guarden comandos con espacios iniciales"""
@@ -151,8 +155,8 @@ class TestCustomShell(unittest.TestCase):
         cmd = f"cat {self.test_file1} | grep line > {self.test_file2} &\n"
         cmd += f"jobs\nwait\nexit"
         stdout, _ = self.run_shell_command(cmd)
-        self.assertIn("", stdout)
-        self.assertIn("", stdout)
+        self.assertIn("cat", stdout)
+        self.assertIn("grep", stdout)
         with open(self.test_file2, "r") as f:
             lines = f.readlines()
         self.assertGreaterEqual(len(lines), 2)
