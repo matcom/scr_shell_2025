@@ -47,11 +47,6 @@ class ShellLexer:
         self.quote_char = ""
 
     def tokenize(self, line: str) -> List[str]:
-        self.tokens = []
-        self.current_token = ""
-        self.in_quote = False
-        self.quote_char = ""
-
         i = 0
         while i < len(line):
             char = line[i]
