@@ -696,9 +696,9 @@ def main_loop() -> None:
 
             if not line:
                 continue
-
-            if line.startswith("!"):
-                history_cmd = executor.get_history_command(line)
+            line2 = line[:].strip()
+            if line2.startswith("!"):
+                history_cmd = executor.get_history_command(line2)
                 if history_cmd:
                     line = history_cmd
                 else:
