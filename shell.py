@@ -189,8 +189,37 @@ class CommandExecutor:
         self.history: Deque[str] = deque(maxlen=50)
         self.alias: Dict[str, str] = {}
         signal.signal(signal.SIGCHLD, self._handle_sigchld)
+        signal.signal(signal.SIGTSTP, self._handle_sigtstp)
 
+    def _handle_sigtstp(self, signum, frame) -> None:
+        if hasattr(self, '_current_foreground_pid') and self._current_foreground_pid > 0:
+            try:
+                os.killpg(os.getpgid(self._current_foreground_pid), signal.SIGTSTP)
+                
+                for job_id, job in self.jobs.items():
+                    if job.pid == self._current_foreground_pid:
+                        job.status = "stopped"
+                        print(f"\n{COLORS['CYAN']}[{job_id}]    stopped    {job.cmd}{COLORS['RESET']}")
+                        break
+                else:
+                    job_id = self.current_job_id
+                    if hasattr(self, '_current_foreground_cmd'):
+                        cmd_str = self._current_foreground_cmd
+                    else:
+                        cmd_str = "unknown command"
+                    self.jobs[job_id] = Job(self._current_foreground_pid, cmd_str, "stopped")
+                    self.current_job_id += 1
+                    print(f"\n{COLORS['CYAN']}[{job_id}]    stopped    {cmd_str}{COLORS['RESET']}")
+                
+                self._current_foreground_pid = -1
+                
+                print(f"{COLORS['GREEN']}$:{COLORS['RESET']} ", end="", flush=True)
+            except Exception as e:
+                print(f"\n{COLORS['RED']}Error deteniendo proceso: {e}{COLORS['RESET']}")
+                
     def _handle_sigchld(self, signum, frame) -> None:
+        printed_prompt = False
+        
         while True:
             try:
                 pid, status = os.waitpid(-1, os.WNOHANG)
@@ -204,7 +233,10 @@ class CommandExecutor:
                                 f"{COLORS['GREEN']}[{job_id}]    done       {job.cmd}{COLORS['RESET']}"
                             )
                             del self.jobs[job_id]
-                            print(f"{COLORS['GREEN']}$:{COLORS['RESET']} ", end="")
+                            if not printed_prompt:
+                                sys.stdout.write(f"{COLORS['GREEN']}$:{COLORS['RESET']} ")
+                                sys.stdout.flush()
+                                printed_prompt = True
                         elif os.WIFSIGNALED(status):
                             sig = os.WTERMSIG(status)
                             if sig == signal.SIGINT:
@@ -216,6 +248,11 @@ class CommandExecutor:
                             del self.jobs[job_id]
                         elif os.WIFSTOPPED(status):
                             job.status = "stopped"
+                            print(f"\n{COLORS['CYAN']}[{job_id}]    stopped    {job.cmd}{COLORS['RESET']}")
+                            if hasattr(self, '_current_foreground_pid') and self._current_foreground_pid == pid:
+                                self._current_foreground_pid = -1
+                                printed_prompt = True
+                                print(f"{COLORS['GREEN']}$:{COLORS['RESET']} ", end="", flush=True)
             except ChildProcessError:
                 break
 
@@ -228,6 +265,10 @@ class CommandExecutor:
                     flush=True,
                 )
                 del self.jobs[job_id]
+                if not printed_prompt:
+                    sys.stdout.write(f"{COLORS['GREEN']}$:{COLORS['RESET']} ")
+                    sys.stdout.flush()
+                    printed_prompt = True
 
     def execute(self, node) -> int:
         try:
@@ -287,6 +328,14 @@ class CommandExecutor:
             return self._builtin_bg(cmd.args[1:] if len(cmd.args) > 1 else None)
         elif cmd.args[0] == "history":
             return self._builtin_history(cmd.args[1:] if len(cmd.args) > 1 else None)
+        elif cmd.args[0] == "stop":
+            return self._builtin_stop(cmd.args[1:] if len(cmd.args) > 1 else None)
+        elif cmd.args[0] == "kill":
+           
+            if len(cmd.args) >= 3 and cmd.args[1] == "-STOP":
+                return self._builtin_stop(cmd.args[2:])
+           
+            return self._spawn_process(cmd.args, cmd.redirects, cmd.background)
 
         return self._spawn_process(cmd.args, cmd.redirects, cmd.background)
 
@@ -335,12 +384,39 @@ class CommandExecutor:
                 return 0
             else:
                 try:
-                    process.wait()
+                   
+                    self._current_foreground_pid = process.pid
+                    self._current_foreground_cmd = " ".join(args)
+                    
+                    
+                    def handle_tstp(sig, frame):
+                  
+                        os.killpg(os.getpgid(process.pid), signal.SIGTSTP)
+                        job_id = self.current_job_id
+                       
+                        self.jobs[job_id] = Job(process.pid, " ".join(args), "stopped")
+                        self.current_job_id += 1
+                        print(f"\n{COLORS['CYAN']}[{job_id}] Stopped   {' '.join(args)}{COLORS['RESET']}")
+                       
+                        print(f"{COLORS['GREEN']}$:{COLORS['RESET']} ", end="", flush=True)
+                        return
+
+           
+                    original_tstp = signal.signal(signal.SIGTSTP, handle_tstp)
+                    
+                    try:
+                        process.wait()
+                    finally:
+                        
+                        signal.signal(signal.SIGTSTP, original_tstp)
+              
+                    self._current_foreground_pid = -1
                     self.last_return_code = process.returncode
                     return process.returncode
                 except KeyboardInterrupt:
                     os.killpg(os.getpgid(process.pid), signal.SIGINT)
                     process.wait()
+                    self._current_foreground_pid = -1
                     self.last_return_code = 128 + signal.SIGINT
                     return self.last_return_code
         except FileNotFoundError:
@@ -591,7 +667,19 @@ class CommandExecutor:
 
         try:
             if not args:
-                job_id = max(self.jobs.keys())
+                job_id = None
+                for jid in sorted(self.jobs.keys(), reverse=True):
+                    if self.jobs[jid].status == "stopped":
+                        job_id = jid
+                        break
+                
+                if job_id is None:
+                    print(
+                        f"{COLORS['RED']}bg: no stopped jobs{COLORS['RESET']}",
+                        flush=True,
+                        file=sys.stderr,
+                    )
+                    return 1
             else:
                 arg = args[0]
                 if arg.startswith("%"):
@@ -703,64 +791,174 @@ class CommandExecutor:
 
         return None
 
+    def _builtin_stop(self, args: Optional[List[str]]) -> int:
+        
+        if not args or len(args) < 1:
+            print(
+                f"{COLORS['RED']}stop: falta PID o ID de trabajo{COLORS['RESET']}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
+            
+        try:
+            
+            target = args[0]
+            if target.startswith("%"):
+             
+                job_id = int(target[1:])
+                job = self.jobs.get(job_id)
+                if not job:
+                    print(
+                        f"{COLORS['RED']}stop: %{job_id}: no existe ese trabajo{COLORS['RESET']}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    return 1
+                pid = job.pid
+            else:
+                
+                try:
+                    pid = int(target)
+                    
+                    found = False
+                    for job_id, job in self.jobs.items():
+                        if job.pid == pid:
+                            found = True
+                            break
+                    if not found:
+                        print(
+                            f"{COLORS['YELLOW']}Advertencia: El PID {pid} no corresponde a ningún trabajo conocido{COLORS['RESET']}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                except ValueError:
+                    print(
+                        f"{COLORS['RED']}stop: {target}: argumento debe ser PID o %jobID{COLORS['RESET']}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    return 1
+            
+            
+            try:
+                os.kill(pid, signal.SIGSTOP)
+                
+            
+                for job_id, job in self.jobs.items():
+                    if job.pid == pid:
+                        job.status = "stopped"
+                        print(
+                            f"{COLORS['CYAN']}[{job_id}] Detenido     {job.cmd}{COLORS['RESET']}",
+                            flush=True,
+                        )
+                        break
+                else:
+                    print(
+                        f"{COLORS['CYAN']}Proceso {pid} detenido{COLORS['RESET']}",
+                        flush=True,
+                    )
+                return 0
+            except ProcessLookupError:
+                print(
+                    f"{COLORS['RED']}stop: ({pid}) - No existe ese proceso{COLORS['RESET']}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+               
+                for job_id, job in list(self.jobs.items()):
+                    if job.pid == pid:
+                        del self.jobs[job_id]
+                        break
+                return 1
+            except PermissionError:
+                print(
+                    f"{COLORS['RED']}stop: ({pid}) - Permiso denegado{COLORS['RESET']}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                return 1
+        except Exception as e:
+            print(
+                f"{COLORS['RED']}stop: Error inesperado: {e}{COLORS['RESET']}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
+
 
 def main_loop() -> None:
     executor = CommandExecutor()
 
-    while True:
-        try:
-            prompt = f"{COLORS['GREEN']}$:{COLORS["RESET"]} "
-            try:
-                line = input(prompt)
-            except EOFError:
-                print()
-                break
-            except KeyboardInterrupt:
-                print()
-                continue
 
-            if not line:
-                continue
-            line2 = line[:].strip()
-            if line2.startswith("!"):
-                history_cmd = executor.get_history_command(line2)
-                if history_cmd:
-                    line = history_cmd
-                else:
-                    print(
-                        f"{COLORS['MAGENTA']}Command not found in history: {line} {COLORS['RESET']}",
-                        file=sys.stderr,
-                        flush=True,
-                    )
+    def handle_sigint(sig, frame):
+        print()  
+        print(f"{COLORS['GREEN']}$:{COLORS['RESET']} ", end="", flush=True)
+        return
+    
+    
+    original_sigint = signal.signal(signal.SIGINT, handle_sigint)
+    original_sigtstp = signal.signal(signal.SIGTSTP, signal.SIG_IGN)  
+
+    try:
+        while True:
+            try:
+                prompt = f"{COLORS['GREEN']}$:{COLORS["RESET"]} "
+                try:
+                    line = input(prompt)
+                except EOFError:
+                    print()
+                    break
+                except KeyboardInterrupt:
+                    print()
                     continue
 
-            executor.add_to_history(line)
+                if not line:
+                    continue
+                line2 = line[:].strip()
+                if line2.startswith("!"):
+                    history_cmd = executor.get_history_command(line2)
+                    if history_cmd:
+                        line = history_cmd
+                    else:
+                        print(
+                            f"{COLORS['MAGENTA']}Command not found in history: {line} {COLORS['RESET']}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        continue
 
-            try:
-                lexer = ShellLexer()
-                tokens = lexer.tokenize(line)
+                executor.add_to_history(line)
 
-                parser = ShellParser(tokens)
-                ast = parser.parse()
-                executor.execute(ast)
-            except KeyboardInterrupt:
-                print()
-                continue
+                try:
+                    lexer = ShellLexer()
+                    tokens = lexer.tokenize(line)
+
+                    parser = ShellParser(tokens)
+                    ast = parser.parse()
+                    executor.execute(ast)
+                except KeyboardInterrupt:
+                    print()
+                    continue
+                except Exception as e:
+                    print(
+                        f"{COLORS['RED']}Error: {e} {COLORS["RESET"]}",
+                        flush=True,
+                        file=sys.stderr,
+                    )
+                    executor.last_return_code = 1
+
             except Exception as e:
                 print(
-                    f"{COLORS['RED']}Error: {e} {COLORS["RESET"]}",
-                    flush=True,
+                    f"{COLORS["RED"]}Unexpected error: {e} {COLORS["RESET"]}",
                     file=sys.stderr,
+                    flush=True,
                 )
                 executor.last_return_code = 1
-
-        except Exception as e:
-            print(
-                f"{COLORS["RED"]}Unexpected error: {e} {COLORS["RESET"]}",
-                file=sys.stderr,
-                flush=True,
-            )
-            executor.last_return_code = 1
+    finally:
+       
+        signal.signal(signal.SIGINT, original_sigint)
+        signal.signal(signal.SIGTSTP, original_sigtstp)
 
 
 if __name__ == "__main__":
