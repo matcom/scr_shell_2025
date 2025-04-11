@@ -656,25 +656,50 @@ class CommandExecutor:
         if not arg:
             return None
 
-        if arg == "!!":
-            return self.history[-1] if self.history else None
+       
+        pipe_parts = arg.split('|', 1)
+        history_part = pipe_parts[0].strip()
+        pipe_suffix = ''
+        
+        if len(pipe_parts) > 1:
+            pipe_suffix = f" | {pipe_parts[1].strip()}"
 
-        if arg.startswith("!"):
-            if arg[1:].isdigit():
-                index = int(arg[1:]) - 1
-                if 0 <= index < len(self.history):
-                    return self.history[index]
+  
+        if history_part == "!!":
+            if not self.history:
                 return None
+            base_cmd = self.history[-1]
+            return f"{base_cmd}{pipe_suffix}"
 
-            cmd_prefix = arg[1:]
+   
+        if history_part.startswith("!") and history_part[1:].isdigit():
+            index = int(history_part[1:]) - 1
+            if 0 <= index < len(self.history):
+                base_cmd = self.history[index]
+                return f"{base_cmd}{pipe_suffix}"
+            return None
 
+
+        if history_part.startswith("!"):
+            cmd_prefix = history_part[1:]
+
+           
             if cmd_prefix in self.alias:
-                return self.alias[cmd_prefix]
+                base_cmd = self.alias[cmd_prefix]
+                return f"{base_cmd}{pipe_suffix}"
 
+
+            for cmd in reversed(self.history):
+                cmd_parts = cmd.split(maxsplit=1)
+                if cmd_parts and cmd_parts[0].startswith(cmd_prefix):
+                    self.alias[cmd_prefix] = cmd
+                    return f"{cmd}{pipe_suffix}"
+                
+            
             for cmd in reversed(self.history):
                 if cmd.startswith(cmd_prefix):
                     self.alias[cmd_prefix] = cmd
-                    return cmd
+                    return f"{cmd}{pipe_suffix}"
 
         return None
 
@@ -739,4 +764,4 @@ def main_loop() -> None:
 
 
 if __name__ == "__main__":
-    main_loop()
+    main_loop()  
