@@ -199,7 +199,7 @@ class CommandExecutor:
                 for job_id, job in self.jobs.items():
                     if job.pid == self._current_foreground_pid:
                         job.status = "stopped"
-                        print(f"\n{COLORS['CYAN']}[{job_id}]    stopped    {job.cmd}{COLORS['RESET']}")
+                        print(f"\n{COLORS['CYAN']}[{job_id}] Detenido    {job.cmd}{COLORS['RESET']}")
                         break
                 else:
                     job_id = self.current_job_id
@@ -209,7 +209,7 @@ class CommandExecutor:
                         cmd_str = "unknown command"
                     self.jobs[job_id] = Job(self._current_foreground_pid, cmd_str, "stopped")
                     self.current_job_id += 1
-                    print(f"\n{COLORS['CYAN']}[{job_id}]    stopped    {cmd_str}{COLORS['RESET']}")
+                    print(f"\n{COLORS['CYAN']}[{job_id}] Detenido    {cmd_str}{COLORS['RESET']}")
                 
                 self._current_foreground_pid = -1
                 
@@ -248,7 +248,7 @@ class CommandExecutor:
                             del self.jobs[job_id]
                         elif os.WIFSTOPPED(status):
                             job.status = "stopped"
-                            print(f"\n{COLORS['CYAN']}[{job_id}]    stopped    {job.cmd}{COLORS['RESET']}")
+                            print(f"\n{COLORS['CYAN']}[{job_id}] Detenido    {job.cmd}{COLORS['RESET']}")
                             if hasattr(self, '_current_foreground_pid') and self._current_foreground_pid == pid:
                                 self._current_foreground_pid = -1
                                 printed_prompt = True
@@ -828,7 +828,7 @@ class CommandExecutor:
                             break
                     if not found:
                         print(
-                            f"{COLORS['YELLOW']}Advertencia: El PID {pid} no corresponde a ningún trabajo conocido{COLORS['RESET']}",
+                            f"{COLORS['MAGENTA']}Advertencia: El PID {pid} no corresponde a ningún trabajo conocido{COLORS['RESET']}",
                             file=sys.stderr,
                             flush=True,
                         )
@@ -849,7 +849,7 @@ class CommandExecutor:
                     if job.pid == pid:
                         job.status = "stopped"
                         print(
-                            f"{COLORS['CYAN']}[{job_id}] Detenido     {job.cmd}{COLORS['RESET']}",
+                            f"{COLORS['CYAN']}[{job_id}] Detenido    {job.cmd}{COLORS['RESET']}",
                             flush=True,
                         )
                         break
