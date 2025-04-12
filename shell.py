@@ -5,14 +5,21 @@ import os
 from src.lexer import ShellLexer
 from src.parser import ShellParser  
 from src.executer import CommandExecutor, COLORS
-
+def get_system_info():
+    try:
+         if os.uname().sysname =="Darwin":
+            return "macOS"
+         elif os.uname().sysname =="Linux":
+            return "Linux"
+    except Exception as e:
+        return "Windows"
 def main_loop() -> None:
     executor = CommandExecutor()
-    
-    # Obtener ancho de terminal para centrado
+
+    sistema = get_system_info()
     term_width = os.get_terminal_size().columns
-    
-    # Arte ASCII mejorado para Alberto
+    python_version = sys.version.split()[0]
+    user = os.getenv('USER', 'usuario')
     print("\n")
     welcome_art = [
         f"{COLORS['BLUE']}╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮",
@@ -42,24 +49,55 @@ def main_loop() -> None:
     
   
     print()
-    system_info = [
-        f"{COLORS['GREEN']}╭─────────────── {COLORS['YELLOW']}SISTEMA{COLORS['GREEN']} ───────────────╮",
-        f"{COLORS['GREEN']}│                                      │",
-        f"{COLORS['GREEN']}│  {COLORS['WHITE']}▶ Versión:  {COLORS['YELLOW']}Shell 1.0.0         {COLORS['GREEN']}│",
-        f"{COLORS['GREEN']}│  {COLORS['WHITE']}▶ Python:   {COLORS['YELLOW']}{sys.version.split()[0]}           {COLORS['GREEN']}│",
-        f"{COLORS['GREEN']}│  {COLORS['WHITE']}▶ Sistema:  {COLORS['YELLOW']}{os.uname().sysname}        {COLORS['GREEN']}│",
-        f"{COLORS['GREEN']}│  {COLORS['WHITE']}▶ Usuario:  {COLORS['YELLOW']}{os.getenv('USER', 'usuario')}     {COLORS['GREEN']}│",
-        f"{COLORS['GREEN']}│                                      │",
-        f"{COLORS['GREEN']}╰──────────────────────────────────────╯{COLORS['RESET']}"
+
+    box_width = 46  
+    system_info = []
+    
+    system_info.append(f"{COLORS['GREEN']}╭{'─' * (box_width - 2)}╮")
+    system_info.append(f"{COLORS['GREEN']}│{' ' * (box_width - 2)}│")
+    
+    title = "INFORMACIÓN DEL SISTEMA"
+    left_padding = (box_width - 2 - len(title)) // 2
+    right_padding = box_width - 2 - len(title) - left_padding
+    system_info.append(f"{COLORS['GREEN']}│{' ' * left_padding}{COLORS['YELLOW']}{title}{COLORS['GREEN']}{' ' * right_padding}│")
+    
+
+    system_info.append(f"{COLORS['GREEN']}│{' ' * (box_width - 2)}│")
+    
+    items = [
+        ("Versión:", "Shell 1.0.0"),
+        ("Python:", python_version),
+        ("Sistema:", sistema),
+        ("Usuario:", user),
     ]
     
+    for label, value in items:
     
-    for line in system_info:
+        content_length = len(f"  ▶ {label} {value}")
+        right_spaces = box_width - 2 - content_length
         
-        clean_line = line
-        for color in [COLORS['GREEN'], COLORS['YELLOW'], COLORS['WHITE']]:
-            clean_line = clean_line.replace(color, '')
-        clean_line = clean_line.replace(COLORS['RESET'], '')
+        line = f"{COLORS['GREEN']}│  {COLORS['WHITE']}▶ {label}{COLORS['GREEN']} {COLORS['YELLOW']}{value}{' ' * right_spaces}{COLORS['GREEN']}│"
+        system_info.append(line)
+    
+ 
+    system_info.append(f"{COLORS['GREEN']}│{' ' * (box_width - 2)}│")
+    
+    system_info.append(f"{COLORS['GREEN']}╰{'─' * (box_width - 2)}╯{COLORS['RESET']}")
+    
+
+    for line in system_info:
+        clean_line = ""
+        i = 0
+        while i < len(line):
+            if line[i] == '\033':
+              
+                while i < len(line) and line[i] != 'm':
+                    i += 1
+                i += 1  
+            else:
+                clean_line += line[i]
+                i += 1
+        
         padding = (term_width - len(clean_line)) // 2
         print(" " * padding + line)
     
