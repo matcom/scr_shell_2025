@@ -14,7 +14,7 @@ Una implementación personalizada de shell en Python con soporte para tuberías,
 - 🔄 **Redirección de I/O**: `>`, `>>`, `<` para manipulación de flujos
 - 📋 **Historial de comandos**: acceder a comandos previos con `!!` y `!n`
 - 🔗 **Tuberías**: conectar la salida de un comando con la entrada de otro usando `|`
-- 🔙 **Ejecución en segundo plano**: ejecutar comandos con `&`
+- 🔙 **Ejecución en segundo plano**: ejecutar comandos con `&` (todos los comandos en la tubería se ejecutan en segundo plano)
 
 ## 🚀 Instalación
 
@@ -47,8 +47,9 @@ $ sort < numeros.txt
 # Tuberías
 $ cat archivo.txt | grep "palabra" | sort
 
-# Ejecución en segundo plano
-$ sleep 10 &
+# Ejecución en segundo plano (todos los comandos en la tubería)
+$ sleep 10 & 
+$ ls | sort | wc -l &    # Todos los comandos se ejecutan concurrentemente en segundo plano
 
 # Historial
 $ history
@@ -66,6 +67,16 @@ pyshell/
 │   ├── parser.py           
 │   ├── ast_tree.py         
 │   └── executer.py         
+│
+├── tests/                       
+│   ├── test_runner.py           
+│   ├── README.md                
+│   └── cases/                   
+│       ├── pipe_and_bg.test     
+│       ├── redirection.test     
+│       ├── error_handling.test  
+│       ├── builtins.test        
+│       └── complex.test         
 │
 ├── docs/                   
 │   └── documentation.md    
@@ -85,6 +96,39 @@ El proyecto está organizado en varios componentes:
 - **AST**: Define las estructuras para representar comandos y tuberías
 - **Ejecutor**: Ejecuta comandos basados en el AST
 - **Shell Principal**: Gestiona la interacción con el usuario
+
+## 🧪 Pruebas
+
+El proyecto incluye un conjunto completo de pruebas automatizadas para validar la funcionalidad de la shell, con detección exhaustiva de errores en:
+
+- Sintaxis de comandos y tuberías
+- Redirecciones de entrada/salida
+- Procesos en segundo plano
+- Comandos integrados
+- Manejo de errores
+
+### Ejecución de pruebas
+
+Para ejecutar todas las pruebas:
+
+```bash
+python tests/test_runner.py
+```
+
+Para ejecutar una prueba específica:
+
+```bash
+python tests/test_runner.py tests/cases/pipe_and_bg.test
+```
+
+### Características del sistema de pruebas
+
+- Aislamiento completo entre pruebas
+- Detección de errores en múltiples niveles (lexer, parser, executor)
+- Manejo adecuado de procesos en segundo plano
+- Verificación exhaustiva de casos de error
+
+Consulte [tests/README.md](tests/README.md) para más información sobre el sistema de pruebas.
 
 ## 📚 Documentación
 

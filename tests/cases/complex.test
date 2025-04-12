@@ -1,0 +1,24 @@
+# Test cases for complex command combinations
+# Deep pipe chains
+ls -la | grep "." | sort -r | head -n 5 | wc -l
+# Redirection with multiple stages (eliminated && operator)
+echo "Test data" > /tmp/complex1.txt
+cat /tmp/complex1.txt | grep "data" > /tmp/complex2.txt
+# Complex quote handling
+echo "Testing 'quotes' within \"quotes\""
+# Execution with special characters
+echo "Special chars: $PATH, ~, *, ?, [], {}"
+# Commands with trailing spaces and tabs
+ls     -la    
+# Commands with leading spaces
+   echo "leading spaces"
+# Extremely long commands (stress testing)
+echo "This is a very long command that aims to test the lexer and parser's ability to handle longer input without breaking or causing performance issues. It contains multiple spaces and special characters like !, @, #, $, %, ^, &, *, (, ), -, =, +, [, ], {, }, ;, :, ', \", <, >, /, and ? to ensure the shell can parse them correctly."
+# Complex redirections with globbing
+ls *.py > /tmp/pyfiles.txt
+# Commented out unsupported feature
+# EXPECT_FAIL: echo "Nested operations: $(ls)" > /tmp/nested.txt
+# Cleanup
+rm /tmp/complex1.txt
+rm /tmp/complex2.txt
+rm /tmp/pyfiles.txt 

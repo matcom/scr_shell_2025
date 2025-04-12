@@ -1,0 +1,17 @@
+# Test cases for pipe operations and background processing
+# Simple pipe
+ls | wc -l
+# Multiple pipes
+ls -la | grep "." | sort | head -n 5
+# Simple background process with short timeout
+sleep 1 &
+# Pipe with background - all commands should run in background
+ls | sort | head -n 3 &
+# Simple redirection
+ls > /tmp/ls_output.txt
+# Check content was created
+cat /tmp/ls_output.txt
+# Cleanup temp files after test
+rm /tmp/ls_output.txt
+# Command substitution - marked as expected to fail since it's not implemented
+EXPECT_FAIL: echo $(ls) 
