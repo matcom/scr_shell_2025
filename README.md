@@ -1,28 +1,96 @@
-# Proyecto 1 - Intérprete de comandos estilo Linux (Python)
+# 🐚 PyShell
 
-Este es un shell básico escrito en Python como parte de la materia **Sistemas Computacionales y Redes**. Soporta ejecución de comandos con redirección, pipes, historial y más.
+[![Python](https://img.shields.io/badge/Python-3.6+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Funcionalidades implementadas
+Una implementación personalizada de shell en Python con soporte para tuberías, redirecciones de entrada/salida, historial de comandos, y más.
 
-- Prompt con `$` y lectura interactiva.
-- Ejecución de comandos del sistema.
-- Comando interno `cd`.
-- Redirección de entrada (`<`), salida (`>`), y append (`>>`).
-- Pipes (`|`) entre múltiples comandos.
-- Ejecución en segundo plano (`&`).
-- Comando `jobs` para ver procesos en background.
-- Comando `fg <n>` para traer un job al foreground.
-- Historial de comandos (`history`), limitado a 50 entradas.
-- Reutilización de comandos:
-  - `!!` → último comando.
-  - `!n` → comando número n.
-  - `!cmd` → último comando que empieza con `cmd`.
-- Expansión correcta dentro de líneas con pipes (`!1 | cmd2 | cmd3`).
-- Manejo de espacios múltiples entre tokens.
+![Shell Demo](https://via.placeholder.com/800x400?text=Shell+Demo)
 
-## Instrucciones de uso
+## ✨ Características
 
-1. Ejecuta el script con Python 3:
+- 🔍 **Sintaxis similar a Bash**: comandos familiares y fáciles de usar
+- 📦 **Comandos integrados**: incluye `cd`, `exit`, `history` y más
+- 🔄 **Redirección de I/O**: `>`, `>>`, `<` para manipulación de flujos
+- 📋 **Historial de comandos**: acceder a comandos previos con `!!` y `!n`
+- 🔗 **Tuberías**: conectar la salida de un comando con la entrada de otro usando `|`
+- 🔙 **Ejecución en segundo plano**: ejecutar comandos con `&`
 
-   ```bash
-   python3 shell.py
+## 🚀 Instalación
+
+```bash
+# Clonar el repositorio
+git clone https://github.com/tuusuario/pyshell.git
+cd pyshell
+
+# Recomendado: Crear y activar un entorno virtual
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+
+# Instalar dependencias (si es necesario)
+pip install -r requirements.txt
+```
+
+## 🔧 Uso
+
+```bash
+# Iniciar la shell
+python shell.py
+```
+
+### Ejemplos de comandos
+
+```bash
+# Comando simple
+$ ls -l
+
+# Redirección de salida
+$ echo "Hola Mundo" > saludo.txt
+
+# Redirección de entrada
+$ sort < numeros.txt
+
+# Tuberías
+$ cat archivo.txt | grep "palabra" | sort
+
+# Ejecución en segundo plano
+$ sleep 10 &
+
+# Historial
+$ history
+$ !!        # Ejecutar último comando
+$ !3        # Ejecutar tercer comando del historial
+```
+
+## 🏗️ Arquitectura
+
+El proyecto está organizado en varios componentes:
+
+- **Lexer**: Analiza la entrada del usuario y la divide en tokens
+- **Parser**: Construye un árbol de sintaxis abstracta (AST) a partir de los tokens
+- **AST**: Define las estructuras para representar comandos y tuberías
+- **Ejecutor**: Ejecuta comandos basados en el AST
+- **Shell Principal**: Gestiona la interacción con el usuario
+
+## 📚 Documentación
+
+Para documentación detallada, consulte [documentation.md](documentation.md).
+
+## 🤝 Contribuir
+
+Las contribuciones son bienvenidas! Por favor, siéntase libre de enviar un PR.
+
+1. Fork el proyecto
+2. Cree su rama de características (`git checkout -b feature/nueva-caracteristica`)
+3. Commit sus cambios (`git commit -m 'Añadir nueva característica'`)
+4. Push a la rama (`git push origin feature/nueva-caracteristica`)
+5. Abra un Pull Request
+
+## 📄 Licencia
+
+Este proyecto está licenciado bajo la licencia MIT - vea el archivo [LICENSE](LICENSE) para más detalles.
+
+## 🙏 Agradecimientos
+
+- Inspirado en shells UNIX tradicionales como Bash y Zsh.
+- Desarrollado como proyecto educativo para entender mejor el funcionamiento interno de las shells.

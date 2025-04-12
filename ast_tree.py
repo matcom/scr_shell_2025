@@ -2,6 +2,9 @@ from typing import List, Tuple
 
 
 class Command:
+    """
+    Clase que representa un comando en el AST.
+    """
     def __init__(
         self,
         args: List[str],
@@ -17,16 +20,25 @@ class Command:
 
 
 class Pipe:
-    def __init__(self, left, right) -> None:
+    """
+    Clase que representa un pipe en el AST.
+    """
+    def __init__(self, left:Command, right:Command) -> None:
         self.left = left
         self.right = right
 
     def __repr__(self) -> str:
-        return f"Pipe({self.left}, {self.right})"
+        return f"Pipe(izq=({self.left}), der=({self.right}))"
 
 
 class Job:
+    """
+    Clase que representa un job en el AST.
+    """
     def __init__(self, pid: int, cmd: str, status: str = "running") -> None:
         self.pid = pid
         self.cmd = cmd
         self.status = status
+
+    def __repr__(self) -> str:
+        return f"Job(pid=({self.pid}), cmd=({self.cmd}), status=({self.status}))"

@@ -47,6 +47,13 @@ def main_loop() -> None:
             except KeyboardInterrupt:
                 print()
                 continue
+            except SyntaxError as e:
+                print(
+                    f"{COLORS['RED']}Syntax error: {e} {COLORS["RESET"]}",
+                    flush=True,
+                    file=sys.stderr,
+                )
+                executor.last_return_code = 1
             except Exception as e:
                 print(
                     f"{COLORS['RED']}Error: {e} {COLORS["RESET"]}",

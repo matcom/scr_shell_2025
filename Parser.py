@@ -3,9 +3,20 @@ from ast_tree import Command, Pipe
 
 
 class ShellParser:
+    """
+    Clase que representa el parser de la shell.
+    """
     def __init__(self, tokens: List[str]) -> None:
         self.tokens = tokens
         self.pos = 0
+     
+        self._validate_background_token()
+
+    def _validate_background_token(self) -> None:
+       
+        for i, token in enumerate(self.tokens):
+            if token == "&" and i < len(self.tokens) - 1:
+                raise SyntaxError(f"Token '&' solo puede aparecer al final de la línea")
 
     def parse(self) -> Command:
         cmd = self.parse_pipe()

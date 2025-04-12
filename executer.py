@@ -14,6 +14,9 @@ COLORS = {
     "CYAN": "\033[96m",
 }
 class CommandExecutor:
+    """
+    Clase que representa el ejecutor de comandos.
+    """
     def __init__(self) -> None:
         self.env = os.environ.copy()
         self.last_return_code = 0
