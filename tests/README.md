@@ -40,6 +40,10 @@ python tests/test_runner.py tests/cases/pipe_and_bg.test
 5. **builtins.test**: Pruebas para comandos integrados de la shell
 6. **complex.test**: Pruebas para combinaciones complejas de características
 7. **pipe_test.test**: Pruebas específicas para verificar el correcto funcionamiento de tuberías
+8. **file_content_verification.test**: Pruebas que verifican el contenido de archivos creados por redirecciones
+9. **complex_pipe_content.test**: Pruebas que verifican el contenido a través de tuberías complejas
+10. **background_content.test**: Pruebas que verifican el contenido generado por procesos en segundo plano
+11. **file_error_handling.test**: Pruebas que verifican el manejo de errores relacionados con archivos
 
 ## Características del Sistema de Pruebas
 
@@ -50,6 +54,20 @@ python tests/test_runner.py tests/cases/pipe_and_bg.test
   - Executor (ejecución)
 - **Manejo de procesos en segundo plano**: Limpieza automática de procesos
 - **Captura de errores**: Detección de mensajes de error incluso cuando el código de retorno es 0
+- **Verificación de contenido**: Comprobación de que el contenido de los archivos sea correcto
+
+## Verificación de Contenido
+
+Las pruebas de verificación de contenido comprueban:
+
+1. **Creación de archivos**: Verificar que los archivos se creen correctamente
+2. **Conservación de contenido**: Comprobar que el contenido escrito sea el esperado
+3. **Redirección de salida**: Verificar que la redirección > funcione correctamente
+4. **Redirección de append**: Verificar que la redirección >> añada correctamente
+5. **Redirección de entrada**: Verificar que la redirección < funcione correctamente
+6. **Tuberías**: Verificar que el contenido se transmita correctamente entre comandos
+7. **Procesos en segundo plano**: Verificar que los procesos en background generen archivos correctos
+8. **Manejo de errores**: Verificar comportamiento adecuado ante errores de archivos
 
 ## Creación de Nuevas Pruebas
 
