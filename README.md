@@ -1,4 +1,4 @@
-# 🐚 PyShell
+# 🐚 Shell
 
 [![Python](https://img.shields.io/badge/Python-3.6+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -20,22 +20,16 @@ Una implementación personalizada de shell en Python con soporte para tuberías,
 
 ```bash
 # Clonar el repositorio
-git clone https://github.com/tuusuario/pyshell.git
-cd pyshell
+git clone https://github.com/ALbertE03/Shell.git
+cd Shell
 
-# Recomendado: Crear y activar un entorno virtual
-python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-
-# Instalar dependencias (si es necesario)
-pip install -r requirements.txt
 ```
 
 ## 🔧 Uso
 
 ```bash
 # Iniciar la shell
-python shell.py
+python3 -m shell
 ```
 
 ### Ejemplos de comandos
@@ -62,6 +56,26 @@ $ !!        # Ejecutar último comando
 $ !3        # Ejecutar tercer comando del historial
 ```
 
+## 📁 Estructura del Proyecto
+
+```
+pyshell/
+├── src/                   
+│   ├── __init__.py                
+│   ├── lexer.py            
+│   ├── parser.py           
+│   ├── ast_tree.py         
+│   └── executer.py         
+│
+├── docs/                   
+│   └── documentation.md    
+│
+├── LICENSE                 
+├── README.md               
+│
+├── shell.py     
+```
+
 ## 🏗️ Arquitectura
 
 El proyecto está organizado en varios componentes:
@@ -74,7 +88,7 @@ El proyecto está organizado en varios componentes:
 
 ## 📚 Documentación
 
-Para documentación detallada, consulte [documentation.md](documentation.md).
+Para documentación detallada, consulte [docs/documentation.md](docs/documentation.md).
 
 ## 🤝 Contribuir
 

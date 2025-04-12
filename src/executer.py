@@ -4,7 +4,7 @@ import subprocess
 import sys
 from typing import Dict, List, Optional, Tuple,Deque
 from collections import deque
-from ast_tree import Command, Pipe, Job
+from src.ast_tree import Command, Pipe, Job
 
 COLORS = {
     "RESET": "\033[0m",
@@ -188,7 +188,7 @@ class CommandExecutor:
             return 127
         except Exception as e:
             print(
-                f"{COLORS["RED"]}Error executing command: {e}{COLORS['RESET']}",
+                f"{COLORS['RED']}Error executing command: {e}{COLORS['RESET']}",
                 file=sys.stderr,
                 flush=True,
             )
@@ -230,7 +230,7 @@ class CommandExecutor:
                             stdout_redir = open(filename, "a")
                     except IOError as e:
                         print(
-                            f"{COLORS['RED']}Cannot open file: {e}{COLORS["RESET"]}",
+                            f"{COLORS['RED']}Cannot open file: {e}{COLORS['RESET']}",
                             file=sys.stderr,
                             flush=True,
                         )
@@ -379,11 +379,11 @@ class CommandExecutor:
 
                 if os.WIFEXITED(status):
                     print(
-                        f"{COLORS['GREEN']}[{job_id}]    done       {job.cmd}{COLORS["RESET"]}",
+                        f"{COLORS['GREEN']}[{job_id}]    done       {job.cmd}{COLORS['RESET']}",
                         flush=True,
                     )
                     del self.jobs[job_id]
-                    print(f"\r{COLORS['GREEN']}$:{COLORS["RESET"]} ",flush=True)
+                    print(f"\r{COLORS['GREEN']}$:{COLORS['RESET']} ",flush=True)
                 elif os.WIFSIGNALED(status):
                     sig = os.WTERMSIG(status)
                     if sig == signal.SIGINT:
@@ -454,7 +454,7 @@ class CommandExecutor:
                 return 0
             except ProcessLookupError:
                 print(
-                    f"{COLORS['CYAN']}bg: job {job_id} has terminated{COLORS["RESET"]}",
+                    f"{COLORS['CYAN']}bg: job {job_id} has terminated{COLORS['RESET']}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -462,7 +462,7 @@ class CommandExecutor:
                 return 1
         except ValueError:
             print(
-                f"{COLORS["RED"]}bg: job ID must be a number{COLORS["RESET"]}",
+                f"{COLORS['RED']}bg: job ID must be a number{COLORS['RESET']}",
                 file=sys.stderr,
                 flush=True,
             )

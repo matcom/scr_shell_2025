@@ -1,5 +1,5 @@
 from typing import List
-from ast_tree import Command, Pipe
+from src.ast_tree import Command, Pipe
 
 
 class ShellParser:
