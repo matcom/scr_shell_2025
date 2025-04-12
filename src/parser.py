@@ -16,7 +16,7 @@ class ShellParser:
        
         for i, token in enumerate(self.tokens):
             if token == "&" and i < len(self.tokens) - 1:
-                raise SyntaxError(f"Token '&' solo puede aparecer al final de la línea")
+                raise SyntaxError(f"Token '&' solo puede aparecer al final del comando")
 
     def parse(self) -> Command:
         cmd = self.parse_pipe()

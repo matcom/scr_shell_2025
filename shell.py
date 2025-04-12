@@ -27,6 +27,7 @@ def main_loop() -> None:
                 history_cmd = executor.get_history_command(line2)
                 if history_cmd:
                     line = history_cmd
+                    print(line)
                 else:
                     print(
                         f"{COLORS['MAGENTA']}Command not found in history: {line} {COLORS['RESET']}",
