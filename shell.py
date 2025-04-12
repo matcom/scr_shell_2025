@@ -1,13 +1,73 @@
 #!/usr/bin/env python3
 
 import sys
+import os
 from src.lexer import ShellLexer
 from src.parser import ShellParser  
 from src.executer import CommandExecutor, COLORS
 
 def main_loop() -> None:
     executor = CommandExecutor()
-
+    
+    # Obtener ancho de terminal para centrado
+    term_width = os.get_terminal_size().columns
+    
+    # Arte ASCII mejorado para Alberto
+    print("\n")
+    welcome_art = [
+        f"{COLORS['BLUE']}╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮",
+        f"{COLORS['BLUE']}    {COLORS['YELLOW']}    ███████╗██╗  ██╗███████╗██╗     ██╗         {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}    {COLORS['YELLOW']}    ██╔════╝██║  ██║██╔════╝██║     ██║         {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}    {COLORS['YELLOW']}    ███████╗███████║█████╗  ██║     ██║         {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}    {COLORS['YELLOW']}    ╚════██║██╔══██║██╔══╝  ██║     ██║         {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}    {COLORS['YELLOW']}    ███████║██║  ██║███████╗███████╗███████╗    {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}    {COLORS['YELLOW']}    ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝    {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}                                                      ",
+        f"{COLORS['BLUE']}     {COLORS['CYAN']}█████╗ ██╗     ██████╗ ███████╗██████╗ ████████╗ ██████╗   {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}   {COLORS['CYAN']}██╔══██╗██║     ██╔══██╗██╔════╝██╔══██╗╚══██╔══╝██╔═══██╗  {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}   {COLORS['CYAN']}███████║██║     ██████╔╝█████╗  ██████╔╝   ██║   ██║   ██║  {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}   {COLORS['CYAN']}██╔══██║██║     ██╔══██╗██╔══╝  ██╔══██╗   ██║   ██║   ██║  {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}   {COLORS['BRIGHT_CYAN']}██║  ██║███████╗██████╔╝███████╗██║  ██║   ██║   ╚██████╔╝  {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}   {COLORS['BRIGHT_CYAN']}╚═╝  ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝   ╚═╝    ╚═════╝   {COLORS['BLUE']}",
+        f"{COLORS['BLUE']}╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯"
+    ]
+    
+  
+    for line in welcome_art:
+       
+        clean_line = line.replace(COLORS['BLUE'], '').replace(COLORS['YELLOW'], '').replace(COLORS['CYAN'], '')
+        clean_line = clean_line.replace(COLORS['MAGENTA'], '').replace(COLORS['BRIGHT_CYAN'], '')
+        padding = (term_width - len(clean_line)) // 2
+        print(" " * padding + line)
+    
+  
+    print()
+    system_info = [
+        f"{COLORS['GREEN']}╭─────────────── {COLORS['YELLOW']}SISTEMA{COLORS['GREEN']} ───────────────╮",
+        f"{COLORS['GREEN']}│                                      │",
+        f"{COLORS['GREEN']}│  {COLORS['WHITE']}▶ Versión:  {COLORS['YELLOW']}Shell 1.0.0         {COLORS['GREEN']}│",
+        f"{COLORS['GREEN']}│  {COLORS['WHITE']}▶ Python:   {COLORS['YELLOW']}{sys.version.split()[0]}           {COLORS['GREEN']}│",
+        f"{COLORS['GREEN']}│  {COLORS['WHITE']}▶ Sistema:  {COLORS['YELLOW']}{os.uname().sysname}        {COLORS['GREEN']}│",
+        f"{COLORS['GREEN']}│  {COLORS['WHITE']}▶ Usuario:  {COLORS['YELLOW']}{os.getenv('USER', 'usuario')}     {COLORS['GREEN']}│",
+        f"{COLORS['GREEN']}│                                      │",
+        f"{COLORS['GREEN']}╰──────────────────────────────────────╯{COLORS['RESET']}"
+    ]
+    
+    
+    for line in system_info:
+        
+        clean_line = line
+        for color in [COLORS['GREEN'], COLORS['YELLOW'], COLORS['WHITE']]:
+            clean_line = clean_line.replace(color, '')
+        clean_line = clean_line.replace(COLORS['RESET'], '')
+        padding = (term_width - len(clean_line)) // 2
+        print(" " * padding + line)
+    
+  
+    inspirational_msg = f"{COLORS['MAGENTA']}✨ Bienvenido  ✨{COLORS['RESET']}"
+    padding = (term_width - len(inspirational_msg) + len(COLORS['MAGENTA']) + len(COLORS['RESET'])) // 2
+    print("\n" + " " * padding + inspirational_msg + "\n")
+    
     while True:
         try:
             prompt = f"\r{COLORS['GREEN']}$:{COLORS['RESET']} "
