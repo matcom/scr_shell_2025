@@ -35,6 +35,54 @@ El proyecto está compuesto por varios componentes clave, cada uno con responsab
   4. Se crea un AST Command(['ls', '-l'], [], False)
   5. Se ejecuta el comando, mostrando el listado detallado del directorio actual
   ```
+### ast_tree.py
+
+#### Clase `Command`
+- **Propósito**: Representa un comando con sus argumentos, redirecciones y estado de ejecución.
+
+#### `__init__(self, args: List[str], redirects: List[Tuple[str, str]] = None, background: bool = False) -> None`
+- **Propósito**: Inicializa un objeto `Command`.
+- **Parámetros**:
+  - `args`: Lista de argumentos del comando (el primero es el comando).
+  - `redirects`: Lista de tuplas (tipo, archivo) para redirecciones.
+  - `background`: Indica si el comando debe ejecutarse en segundo plano.
+- **Ejemplo**:
+  ```python
+  # Comando simple
+  cmd1 = Command(['ls', '-l'], [], False)
+  
+  # Comando con redirección de salida
+  cmd2 = Command(['echo', 'hola'], [('OUT', 'salida.txt')], False)
+  
+  # Comando en segundo plano
+  cmd3 = Command(['sleep', '10'], [], True)
+  ```
+
+#### `__repr__(self) -> str`
+- **Propósito**: Representación en cadena del objeto `Command`.
+- **Retorno**: Cadena que representa el objeto.
+- **Ejemplo**:
+  ```
+  Objeto: Command(['ls', '-l'], [], False)
+  __repr__: "Command(['ls', '-l'], [], False)"
+  ```
+
+#### Clase `Pipe`
+- **Propósito**: Representa una tubería entre dos comandos.
+
+#### `__init__(self, left: Command, right: Command) -> None`
+- **Propósito**: Inicializa un objeto `Pipe`.
+- **Parámetros**:
+  - `left`: Comando a la izquierda de la tubería.
+  - `right`: Comando a la derecha de la tubería.
+- **Ejemplo**:
+  ```python
+  # cat archivo.txt | grep palabra
+  pipe = Pipe(
+      Command(['cat', 'archivo.txt'], [], False),
+      Command(['grep', 'palabra'], [], False)
+  )
+  ```
 
 ### Lexer.py
 
@@ -107,7 +155,7 @@ El proyecto está compuesto por varios componentes clave, cada uno con responsab
   Entrada: ['cat', 'archivo.txt', '|', 'grep', 'palabra']
   Proceso:
   1. parse_pipe() crea una estructura Pipe
-  Salida: Pipe(Command(['cat', 'archivo.txt'], [], False), Command(['grep', 'palabra'], [], False))
+  Salida: Pipe(izq=(Command(['cat', 'archivo.txt'], [], False)), der=(Command(['grep', 'palabra'], [], False)))
   ```
 
 #### `_mark_pipe_background(self, pipe_node) -> None`
@@ -117,9 +165,9 @@ El proyecto está compuesto por varios componentes clave, cada uno con responsab
 - **Algoritmo**: Recorre recursivamente la estructura de tuberías hasta llegar al último comando, que marca como background.
 - **Ejemplo**:
   ```
-  Entrada: Pipe(Command(['ls'], [], False), Command(['grep', 'txt'], [], False))
+  Entrada: Pipe(izq=(Command(['ls'], [], False)), der=(Command(['grep', 'txt'], [], False)))
   Después de _mark_pipe_background():
-  Pipe(Command(['ls'], [], False), Command(['grep', 'txt'], [], True))
+  Pipe(izq=(Command(['ls'], [], False)), der=(Command(['grep', 'txt'], [], True)))
   ```
 
 #### `parse_pipe(self) -> Command`
@@ -134,7 +182,7 @@ El proyecto está compuesto por varios componentes clave, cada uno con responsab
   Proceso:
   1. parse_redirect() devuelve Command(['ls'], [], False)
   2. Encuentra '|', obtiene otro comando Command(['grep', 'txt'], [], False)
-  Salida: Pipe(Command(['ls'], [], False), Command(['grep', 'txt'], [], False))
+  Salida: Pipe(izq=(Command(['ls'], [], False)), der=(Command(['grep', 'txt'], [], False)))
   ```
 
 #### `parse_redirect(self) -> Command`
@@ -195,54 +243,7 @@ El proyecto está compuesto por varios componentes clave, cada uno con responsab
   Resultado: SyntaxError("Unexpected end of input")
   ```
 
-### ast_tree.py
 
-#### Clase `Command`
-- **Propósito**: Representa un comando con sus argumentos, redirecciones y estado de ejecución.
-
-#### `__init__(self, args: List[str], redirects: List[Tuple[str, str]] = None, background: bool = False) -> None`
-- **Propósito**: Inicializa un objeto `Command`.
-- **Parámetros**:
-  - `args`: Lista de argumentos del comando (el primero es el comando).
-  - `redirects`: Lista de tuplas (tipo, archivo) para redirecciones.
-  - `background`: Indica si el comando debe ejecutarse en segundo plano.
-- **Ejemplo**:
-  ```python
-  # Comando simple
-  cmd1 = Command(['ls', '-l'], [], False)
-  
-  # Comando con redirección de salida
-  cmd2 = Command(['echo', 'hola'], [('OUT', 'salida.txt')], False)
-  
-  # Comando en segundo plano
-  cmd3 = Command(['sleep', '10'], [], True)
-  ```
-
-#### `__repr__(self) -> str`
-- **Propósito**: Representación en cadena del objeto `Command`.
-- **Retorno**: Cadena que representa el objeto.
-- **Ejemplo**:
-  ```
-  Objeto: Command(['ls', '-l'], [], False)
-  __repr__: "Command(['ls', '-l'], [], False)"
-  ```
-
-#### Clase `Pipe`
-- **Propósito**: Representa una tubería entre dos comandos.
-
-#### `__init__(self, left: Command, right: Command) -> None`
-- **Propósito**: Inicializa un objeto `Pipe`.
-- **Parámetros**:
-  - `left`: Comando a la izquierda de la tubería.
-  - `right`: Comando a la derecha de la tubería.
-- **Ejemplo**:
-  ```python
-  # cat archivo.txt | grep palabra
-  pipe = Pipe(
-      Command(['cat', 'archivo.txt'], [], False),
-      Command(['grep', 'palabra'], [], False)
-  )
-  ```
 
 #### `__repr__(self) -> str`
 - **Propósito**: Representación en cadena del objeto `Pipe`.
