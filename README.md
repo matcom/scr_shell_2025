@@ -5,7 +5,7 @@
 
 Una implementación personalizada de shell en Python con soporte para tuberías, redirecciones de entrada/salida, historial de comandos, y más.
 
-![Shell Demo](https://via.placeholder.com/800x400?text=Shell+Demo)
+
 
 ## ✨ Características
 

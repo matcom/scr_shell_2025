@@ -30,6 +30,12 @@ class ShellParser:
         return cmd
 
     def _mark_pipe_background(self, pipe_node) -> None:
+        
+        if isinstance(pipe_node.left, Pipe):
+            self._mark_pipe_background(pipe_node.left)
+        else:
+            pipe_node.left.background = True
+            
         if isinstance(pipe_node.right, Pipe):
             self._mark_pipe_background(pipe_node.right)
         else:
