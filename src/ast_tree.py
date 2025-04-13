@@ -36,9 +36,10 @@ class Job:
     Clase que representa un job en el AST.
     """
     def __init__(self, pid: int, cmd: str, status: str = "running") -> None:
-        self.pid = pid
-        self.cmd = cmd
-        self.status = status
+        self.pid = pid  
+        self.cmd = cmd  
+        self.status = status  
+        self.pids = [pid] 
 
     def __repr__(self) -> str:
-        return f"Job(pid=({self.pid}), cmd=({self.cmd}), status=({self.status}))"
+        return f"Job(pid=({self.pid}), cmd=({self.cmd}), status=({self.status}), pids=({self.pids}))"

@@ -5,17 +5,16 @@ import os
 from src.lexer import ShellLexer
 from src.parser import ShellParser  
 from src.executer import CommandExecutor, COLORS
-def get_system_info():
-    try:
-         if os.uname().sysname =="Darwin":
-            return "macOS"
-         elif os.uname().sysname =="Linux":
-            return "Linux"
-    except Exception as e:
-        return "Windows"
-def main_loop() -> None:
-    executor = CommandExecutor()
 
+def sms():
+    def get_system_info():
+        try:
+            if os.uname().sysname =="Darwin":
+                return "macOS"
+            elif os.uname().sysname =="Linux":
+                return "Linux"
+        except Exception as e:
+            return "Windows"
     sistema = get_system_info()
     term_width = os.get_terminal_size().columns
     python_version = sys.version.split()[0]
@@ -105,12 +104,18 @@ def main_loop() -> None:
     inspirational_msg = f"{COLORS['MAGENTA']}✨ Bienvenido  ✨{COLORS['RESET']}"
     padding = (term_width - len(inspirational_msg) + len(COLORS['MAGENTA']) + len(COLORS['RESET'])) // 2
     print("\n" + " " * padding + inspirational_msg + "\n")
+def main_loop() -> None:
+    executor = CommandExecutor()
+    sms()
     
     while True:
         try:
             prompt = f"\r{COLORS['GREEN']}$:{COLORS['RESET']} "
             try:
                 line = input(prompt)
+                if line == 'home':
+                    sms()
+                    continue
             except EOFError:
                 print()
                 break
@@ -120,6 +125,7 @@ def main_loop() -> None:
 
             if not line:
                 continue
+                
             line2 = line[:].strip()
             if line2.startswith("!"):
                 history_cmd = executor.get_history_command(line2)
@@ -137,12 +143,12 @@ def main_loop() -> None:
             executor.add_to_history(line)
 
             try:
-                lexer = ShellLexer()
-                tokens = lexer.tokenize(line)
-
-                parser = ShellParser(tokens)
-                ast = parser.parse()
-                executor.execute(ast)
+                    lexer = ShellLexer()
+                    tokens = lexer.tokenize(line)
+                    parser = ShellParser(tokens)
+                    ast = parser.parse()
+                    print(ast)
+                    executor.execute(ast)
             except KeyboardInterrupt:
                 print()
                 continue

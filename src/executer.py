@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple,Deque
 from collections import deque
 from src.ast_tree import Command, Pipe, Job
 
-COLORS = {
+COLORS: Dict[str,str]= {
     "RESET": "\033[0m",
     "RED": "\033[91m",
     "GREEN": "\033[92m",
@@ -23,9 +23,9 @@ class CommandExecutor:
     """
     def __init__(self) -> None:
         self.env = os.environ.copy()
-        self.last_return_code = 0
+        self.last_return_code: int = 0
         self.jobs: Dict[int, Job] = {}
-        self.current_job_id = 1
+        self.current_job_id: int = 1
         self.history: Deque[str] = deque(maxlen=50)
         self.alias: Dict[str, str] = {}
         signal.signal(signal.SIGCHLD, self._handle_sigchld)
@@ -41,7 +41,7 @@ class CommandExecutor:
                     if job.pid == pid:
                         if os.WIFEXITED(status):
                             print(
-                                f"{COLORS['GREEN']}[{job_id}]    done       {job.cmd}{COLORS['RESET']}"
+                                f"{COLORS['GREEN']}[{job_id}]  -  done       {job.cmd}{COLORS['RESET']}"
                             )
                             del self.jobs[job_id]
                             print(f"\r{COLORS['GREEN']}$:{COLORS['RESET']} ", end="")
@@ -71,9 +71,7 @@ class CommandExecutor:
 
     def execute(self, node) -> int:
         try:
-            if isinstance(node, (Command, Pipe)):
-                cmd_str = self._ast_to_string(node)
-
+          
             if isinstance(node, Command):
                 return self._execute_command(node)
             elif isinstance(node, Pipe):
@@ -123,8 +121,6 @@ class CommandExecutor:
             return self._builtin_jobs()
         elif cmd.args[0] == "fg":
             return self._builtin_fg(cmd.args[1:] if len(cmd.args) > 1 else None)
-        elif cmd.args[0] == "bg":
-            return self._builtin_bg(cmd.args[1:] if len(cmd.args) > 1 else None)
         elif cmd.args[0] == "history":
             return self._builtin_history(cmd.args[1:] if len(cmd.args) > 1 else None)
 
@@ -421,57 +417,6 @@ class CommandExecutor:
             )
             return 1
 
-    def _builtin_bg(self, args: Optional[List[str]]) -> int:
-        if not self.jobs:
-            print(
-                f"{COLORS['RED']}bg: no current job{COLORS['RESET']}",
-                flush=True,
-                file=sys.stderr,
-            )
-            return 1
-
-        try:
-            if not args:
-                job_id = max(self.jobs.keys())
-            else:
-                arg = args[0]
-                if arg.startswith("%"):
-                    arg = arg[1:]
-                job_id = int(arg)
-
-            job = self.jobs.get(job_id)
-            if not job:
-                print(
-                    f"{COLORS['RED']}bg: {job_id}: no such job{COLORS['RESET']}",
-                    flush=True,
-                    file=sys.stderr,
-                )
-                return 1
-
-            try:
-                os.kill(job.pid, signal.SIGCONT)
-                job.status = "running"
-                print(
-                    f"{COLORS['CYAN']}[{job_id}] {job.pid} {job.cmd}{COLORS['RESET']}",
-                    flush=True,
-                )
-                return 0
-            except ProcessLookupError:
-                print(
-                    f"{COLORS['CYAN']}bg: job {job_id} has terminated{COLORS['RESET']}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                del self.jobs[job_id]
-                return 1
-        except ValueError:
-            print(
-                f"{COLORS['RED']}bg: job ID must be a number{COLORS['RESET']}",
-                file=sys.stderr,
-                flush=True,
-            )
-            return 1
-
     def _builtin_history(self, args: Optional[List[str]]) -> int:
         limit = None
         if args and args[0].isdigit():
@@ -535,5 +480,5 @@ class CommandExecutor:
 
             print(f"!{cmd_prefix}: event not found")
             return None
-
-        return None
+        
+        return None 

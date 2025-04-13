@@ -10,34 +10,24 @@ class ShellParser:
         self.tokens = tokens
         self.pos = 0
      
-        if self.tokens:  
-            self._validate_background_token()
-            self._validate_pipe_token()
+        if self.tokens:    
+            self._validate_token()
 
-    def _validate_background_token(self) -> None:
        
+    def _validate_token(self) -> None:
+        if not self.tokens:
+            return
+        
         for i, token in enumerate(self.tokens):
             if token == "&" and i < len(self.tokens) - 1:
                 raise SyntaxError(f"Token '&' solo puede aparecer al final del comando")
-                
-    def _validate_pipe_token(self) -> None:
-
-        if not self.tokens:
-            return
-            
-      
-        if self.tokens[0] == "|":
-            raise SyntaxError("No se puede comenzar un comando con el token '|'")
-        
-        
-        if self.tokens[0] in ("<", ">", ">>"):
+                       
+        if self.tokens[0] in ("<", ">", ">>","|"):
             raise SyntaxError(f"No se puede comenzar un comando con el token '{self.tokens[0]}'")
-        
-     
+           
         if self.tokens[-1] == "|":
             raise SyntaxError("No se puede terminar un comando con el token '|'")
             
-      
         for i in range(len(self.tokens) - 1):
             if self.tokens[i] == "|" and self.tokens[i+1] == "|":
                 raise SyntaxError("No se permiten tokens '|' consecutivos")
