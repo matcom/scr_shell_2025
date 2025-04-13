@@ -1,0 +1,30 @@
+# Test cases for error handling with wildcards in pipes
+
+# Setup test environment
+mkdir -p /tmp/wildcard_errors
+
+
+# Test 1: Expect failure with invalid pipe sequence
+EXPECT_FAIL: ls -la /tmp/wildcard_errors/* |
+
+# Test 2: Pipe with invalid command but valid wildcard
+EXPECT_FAIL: invalidcommand /tmp/wildcard_errors/*.txt | grep "test"
+
+# Test 3: Empty command expansion with pipe
+# This should expand to empty and not be considered an error
+echo "" > /tmp/wildcard_errors/empty.txt
+cat /tmp/wildcard_errors/empty.txt | wc -l | grep "1"
+
+
+# Test 4: Wildcards with Unicode characters
+touch /tmp/wildcard_errors/üñíçødé.txt
+ls -la /tmp/wildcard_errors/üñíçødé* | grep "üñíçødé.txt" | wc -l | grep "1"
+
+
+# Test 5: Very long wildcard pattern
+mkdir -p /tmp/wildcard_errors/long
+touch /tmp/wildcard_errors/long/verylongfilename_with_many_characters_to_test_expansion_limits.txt
+ls -la /tmp/wildcard_errors/long/very*limits.txt | grep "verylongfilename" | wc -l | grep "1"
+
+# Clean up
+rm -rf /tmp/wildcard_errors 

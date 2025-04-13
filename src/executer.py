@@ -5,8 +5,9 @@ import sys
 from typing import Dict, List, Optional, Tuple,Deque
 from collections import deque
 from src.ast_tree import Command, Pipe, Job
+import glob
 
-COLORS: Dict[str,str]= {
+COLORS = {
     "RESET": "\033[0m",
     "RED": "\033[91m",
     "GREEN": "\033[92m",
@@ -23,9 +24,9 @@ class CommandExecutor:
     """
     def __init__(self) -> None:
         self.env = os.environ.copy()
-        self.last_return_code: int = 0
+        self.last_return_code = 0
         self.jobs: Dict[int, Job] = {}
-        self.current_job_id: int = 1
+        self.current_job_id = 1
         self.history: Deque[str] = deque(maxlen=50)
         self.alias: Dict[str, str] = {}
         signal.signal(signal.SIGCHLD, self._handle_sigchld)
@@ -41,7 +42,7 @@ class CommandExecutor:
                     if job.pid == pid:
                         if os.WIFEXITED(status):
                             print(
-                                f"{COLORS['GREEN']}[{job_id}]  -  done       {job.cmd}{COLORS['RESET']}"
+                                f"{COLORS['GREEN']}[{job_id}]    done       {job.cmd}{COLORS['RESET']}"
                             )
                             del self.jobs[job_id]
                             print(f"\r{COLORS['GREEN']}$:{COLORS['RESET']} ", end="")
@@ -71,7 +72,9 @@ class CommandExecutor:
 
     def execute(self, node) -> int:
         try:
-          
+            if isinstance(node, (Command, Pipe)):
+                cmd_str = self._ast_to_string(node)
+
             if isinstance(node, Command):
                 return self._execute_command(node)
             elif isinstance(node, Pipe):
@@ -129,6 +132,23 @@ class CommandExecutor:
     def _spawn_process(
         self, args: List[str], redirects: List[Tuple[str, str]], background: bool
     ) -> int:
+        expanded_args = []
+        for arg in args:
+            if '*' in arg or '?' in arg:
+                matches = glob.glob(arg)
+                if matches:
+                    expanded_args.extend(matches)
+                else:
+                  
+                    expanded_args.append(arg)
+            else:
+                expanded_args.append(arg)
+        
+        args = expanded_args
+
+        if not args:
+            return 0
+
         stdin = None
         stdout = None
         stderr = None
@@ -150,10 +170,12 @@ class CommandExecutor:
                 return 1
 
         try:
+            final_stdout = stdout or sys.stdout
+
             process = subprocess.Popen(
                 args,
                 stdin=stdin or sys.stdin,
-                stdout=stdout or sys.stdout,
+                stdout=final_stdout,
                 stderr=stderr or sys.stderr,
                 env=self.env,
                 preexec_fn=os.setsid,
@@ -213,7 +235,31 @@ class CommandExecutor:
 
         for i, cmd in enumerate(commands):
             try:
+               
+                expanded_args = []
+                for arg in cmd.args:
+                    if '*' in arg or '?' in arg:
+                        matches = glob.glob(arg)
+                        if matches:
+                            expanded_args.extend(matches)
+                        else:
+                            
+                            expanded_args.append(arg)
+                    else:
+                        expanded_args.append(arg)
+                
+                cmd.args = expanded_args
+
+                if not cmd.args:
+                    continue
+
+               
+                if not cmd.args:
+                    print(f"{COLORS['RED']}Warning: Empty command in pipe at position {i}{COLORS['RESET']}", file=sys.stderr)
+                    continue
+
                 stdin = prev_stdout
+                
                 stdout = subprocess.PIPE if i < len(commands) - 1 else None
                 stderr = None
 
@@ -236,10 +282,15 @@ class CommandExecutor:
                         )
                         return 1
 
+                
+                final_stdout = stdout_redir or stdout
+                if i == len(commands) - 1 and final_stdout is None:
+                    final_stdout = sys.stdout
+
                 process = subprocess.Popen(
                     cmd.args,
                     stdin=stdin_redir or stdin,
-                    stdout=stdout_redir or stdout,
+                    stdout=final_stdout,
                     stderr=stderr,
                     env=self.env,
                     universal_newlines=True,
@@ -251,7 +302,7 @@ class CommandExecutor:
                 if prev_stdout and prev_stdout not in (sys.stdin, None):
                     prev_stdout.close()
 
-                prev_stdout = process.stdout if i < len(commands) - 1 else None
+                prev_stdout = process.stdout
 
             except FileNotFoundError:
                 print(
@@ -276,12 +327,19 @@ class CommandExecutor:
             try:
                 for p in processes:
                     p.wait()
-                self.last_return_code = processes[-1].returncode
-                return self.last_return_code
+              
+                if processes:
+                    return_code = processes[-1].returncode
+                    self.last_return_code = return_code
+                    return return_code
+                return 0
             except KeyboardInterrupt:
                 for p in processes:
-                    os.killpg(os.getpgid(p.pid), signal.SIGINT)
-                    p.wait()
+                    try:
+                        os.killpg(os.getpgid(p.pid), signal.SIGINT)
+                        p.wait()
+                    except (ProcessLookupError, OSError):
+                        pass
                 self.last_return_code = 128 + signal.SIGINT
                 return self.last_return_code
 
@@ -480,5 +538,6 @@ class CommandExecutor:
 
             print(f"!{cmd_prefix}: event not found")
             return None
-        
-        return None 
+
+        return None
+       

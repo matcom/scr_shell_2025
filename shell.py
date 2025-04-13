@@ -147,7 +147,6 @@ def main_loop() -> None:
                     tokens = lexer.tokenize(line)
                     parser = ShellParser(tokens)
                     ast = parser.parse()
-                    print(ast)
                     executor.execute(ast)
             except KeyboardInterrupt:
                 print()
