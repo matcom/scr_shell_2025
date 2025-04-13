@@ -113,7 +113,8 @@ def main_loop() -> None:
             prompt = f"\r{COLORS['GREEN']}$:{COLORS['RESET']} "
             try:
                 line = input(prompt)
-                if line == 'home':
+                line1= line.strip()
+                if line1 == 'home':
                     sms()
                     continue
             except EOFError:
