@@ -123,11 +123,12 @@ def main_loop() -> None:
             except KeyboardInterrupt:
                 print()
                 continue
-
             if not line:
                 continue
                 
             line2 = line[:].strip()
+            if not line2:
+                continue
             if line2.startswith("!"):
                 history_cmd = executor.get_history_command(line2)
                 if history_cmd:
