@@ -2,10 +2,10 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+*.txt
 # C extensions
 *.so
-
+.Ds_Store
 # Distribution / packaging
 .Python
 build/
@@ -172,3 +172,23 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+.DS_Store
+
+# Temporary test files
+/tmp/test_*.txt
+/tmp/*_output.txt
+/tmp/pyfiles.txt
+/tmp/complex*.txt
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Environment variables
+.env
+
+# OS specific files
+.DS_Store
+Thumbs.db

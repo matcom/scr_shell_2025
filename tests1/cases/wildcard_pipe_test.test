@@ -1,0 +1,60 @@
+# Test cases for complex pipes with wildcards (glob patterns)
+
+# Prepare test files
+mkdir -p /tmp/wildcard_test
+echo "This is file 1" > /tmp/wildcard_test/file1.txt
+echo "This is file 2" > /tmp/wildcard_test/file2.txt
+echo "This is file 3" > /tmp/wildcard_test/file3.txt
+echo "Another file" > /tmp/wildcard_test/another.txt
+echo "A Python file" > /tmp/wildcard_test/script.py
+echo "Another Python file" > /tmp/wildcard_test/test.py
+echo "A shell script" > /tmp/wildcard_test/script.sh
+echo "A config file" > /tmp/wildcard_test/config.json
+
+# Test 1: Simple wildcard with pipe
+ls -la /tmp/wildcard_test/*.txt | grep "file" | wc -l | grep "3"
+
+# Test 2: Multiple wildcards in same pipe
+cat /tmp/wildcard_test/*.txt | grep "file" | grep -v "3" | wc -l | grep "2"
+
+# Test 3: Wildcards across multiple files with different extensions
+cat /tmp/wildcard_test/*.py | grep "Python" | wc -l | grep "2"
+
+# Test 4: Complex pipe with wildcards and sorting
+ls -la /tmp/wildcard_test/*.txt /tmp/wildcard_test/*.py | sort | grep ".py\|.txt" | wc -l | grep "5"
+
+# Test 5: Globbing and text processing
+cat /tmp/wildcard_test/*.txt | tr 'a-z' 'A-Z' | grep "FILE" | wc -l | grep "3"
+
+# Test 6: Multiple wildcard patterns with filtering
+ls -la /tmp/wildcard_test/*.py /tmp/wildcard_test/*.sh | grep -v "config" | wc -l | grep "3"
+
+# Test 7: Using wildcards to count specific content
+grep -l "Python" /tmp/wildcard_test/* | wc -l | grep "2"
+
+# Test 8: Wildcard expansion with multiple commands in pipe
+find /tmp/wildcard_test -name "*.txt" | xargs cat | grep "file" | wc -l | grep "3"
+
+# Test 9: Nested directory wildcards with grep
+mkdir -p /tmp/wildcard_test/subdir
+echo "Nested file content" > /tmp/wildcard_test/subdir/nested.txt
+find /tmp/wildcard_test -name "*.txt" | xargs cat | grep "file\|Nested" | wc -l | grep "4"
+
+# Test 10: Combination of wildcards with redirection
+cat /tmp/wildcard_test/*.py | grep "Python" > /tmp/wildcard_test/result.txt
+cat /tmp/wildcard_test/result.txt | wc -l | grep "2"
+
+# Test 11: Complex sorting with multiple wildcards
+ls -la /tmp/wildcard_test/*.{txt,py,sh} | sort -r | head -n 3 | grep -E "\.py|\.sh|\.txt" | wc -l | grep "3"
+
+# Test 13: Wildcard in the middle of filename
+ls -la /tmp/wildcard_test/*ile*.txt | grep "file" | wc -l | grep "3"
+
+# Test 14: Multiple different wildcards in one command
+cat /tmp/wildcard_test/*.{py,sh} | grep -E "Python|shell" | wc -l | grep "2"
+
+# Test 15: Wildcards with advanced text processing
+cat /tmp/wildcard_test/*.txt | awk '{print length, $0}' | sort -n | tail -n 1 | grep "Nested" | wc -l | grep "1"
+
+# Clean up test files
+rm -rf /tmp/wildcard_test 
