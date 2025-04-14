@@ -68,7 +68,8 @@ def execute_command(command, expect_fail=False):
     # Capturar salida y errores
     with redirect_stderr(stderr_capture), redirect_stdout(stdout_capture):
         try:
-            return_code = executor.execute(ast)
+            executor.execute(ast)
+            return_code = executor.last_return_code
         except Exception as e:
             if expect_fail:
                 print(f"{COLORS['GREEN']}✓ Passed: Executor raised exception as expected: {str(e)}{COLORS['RESET']}")
