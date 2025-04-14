@@ -6,7 +6,7 @@ from src.lexer import ShellLexer
 from src.parser import ShellParser  
 from src.executer import CommandExecutor, COLORS
 
-def sms():
+"""def sms():
     def get_system_info():
         try:
             if os.uname().sysname =="Darwin":
@@ -103,20 +103,20 @@ def sms():
   
     inspirational_msg = f"{COLORS['MAGENTA']}✨ Bienvenido  ✨{COLORS['RESET']}"
     padding = (term_width - len(inspirational_msg) + len(COLORS['MAGENTA']) + len(COLORS['RESET'])) // 2
-    print("\n" + " " * padding + inspirational_msg + "\n")
+    print("\n" + " " * padding + inspirational_msg + "\n")"""
 def main_loop() -> None:
     executor = CommandExecutor()
-    sms()
+    #sms()
     
     while True:
         try:
             prompt = f"\r{COLORS['GREEN']}$:{COLORS['RESET']} "
             try:
                 line = input(prompt)
-                line1= line.strip()
+                """line1= line.strip()
                 if line1 == 'home':
                     sms()
-                    continue
+                    continue"""
             except EOFError:
                 print()
                 break
