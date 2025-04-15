@@ -502,6 +502,17 @@ class CommandExecutor:
         if not arg:
             return None
 
+        redirection = ""
+        
+
+        for op in ['>', '>>', '<']:
+            if op in arg:
+                parts = arg.split(op, 1)
+                if len(parts) > 1:
+                    arg = parts[0].strip()
+                    redirection = f"{op}{parts[1]}"
+                    break
+                    
         pipe_parts = arg.split('|', 1)
         history_part = pipe_parts[0].strip()
         pipe_suffix = ''
@@ -514,7 +525,7 @@ class CommandExecutor:
                 print("!!: event not found")
                 return None
             base_cmd = self.history[-1]
-            return f"{base_cmd}{pipe_suffix}"
+            return f"{base_cmd}{pipe_suffix}{redirection}"
 
         if history_part.startswith("!") and history_part[1:].isdigit():
             index = int(history_part[1:]) - 1
@@ -523,7 +534,7 @@ class CommandExecutor:
                 return None
             if index < len(self.history):
                 base_cmd = self.history[index]
-                return f"{base_cmd}{pipe_suffix}"
+                return f"{base_cmd}{pipe_suffix}{redirection}"
             print(f"!{history_part[1:]}: event not found")
             return None
 
@@ -536,7 +547,7 @@ class CommandExecutor:
 
             for cmd in reversed(self.history):
                 if cmd.startswith(cmd_prefix):
-                    return f"{cmd}{pipe_suffix}"
+                    return f"{cmd}{pipe_suffix}{redirection}"
 
             print(f"!{cmd_prefix}: event not found")
             return None
