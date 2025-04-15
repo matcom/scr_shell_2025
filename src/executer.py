@@ -180,6 +180,8 @@ class CommandExecutor:
                 env=self.env,
                 preexec_fn=os.setsid,
                 universal_newlines=True,
+                text=True,
+                encoding='utf-8',
             )
 
             if background:
