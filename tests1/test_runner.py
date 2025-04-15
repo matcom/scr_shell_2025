@@ -104,12 +104,11 @@ def execute_command(command, expect_fail=False):
             return True
         else:
             # Mostrar advertencia si hay errores pero no fallamos la prueba
-            if stderr_content:
-                print(f"{COLORS['YELLOW']}⚠ Warning: Command produced output to stderr{COLORS['RESET']}")
+            #if stderr_content:
+               # print(f"{COLORS['YELLOW']}⚠ Warning: Command produced output to stderr{COLORS['RESET']}")
             
             print(f"{COLORS['GREEN']}✓ Passed: Command executed (return code: {return_code}){COLORS['RESET']}")
-            return True
-
+            return True   
 def _clean_background_processes(executor):
     """Limpia los procesos en background de forma segura"""
     for job_id, job in list(executor.jobs.items()):
