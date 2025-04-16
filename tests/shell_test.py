@@ -1,4 +1,26 @@
-import subprocess, os
+import subprocess, select
+
+def non_breaking_communicate(proc, input, timeout=0.1, multiple_output=True):
+
+    if not input.endswith('\n'):
+        input += '\n'
+
+    proc.stdin.write(input)
+    proc.stdin.flush()
+
+    res = ''
+
+    if select.select([proc.stdout], [], [], timeout)[0]:
+        print(res)
+        res = proc.stdout.readline()
+
+    if multiple_output:
+        while select.select([proc.stdout], [], [], timeout)[0]:
+            out = proc.stdout.readline()
+            res +=  out
+
+    return res
+
 
 def make_test(name, processing_function, extra_args = None):
     command = f"./run.sh"
@@ -17,6 +39,15 @@ def call_and_check_template(process, instructinos):
     for (a,b) in instructinos:
         out, _ = process.communicate(input = a)
 
+        if len(out) > 0:
+            print(f"Execution input:{a} output: {out}")
+
+        if not b in out:
+            raise Exception("\033[31m" + f" {a} failed\033[0m")
+        
+def call_and_check_template_with_commuinicate(process, instructinos):
+    for (a,b) in instructinos:
+        out = non_breaking_communicate(process, input = a)
         if len(out) > 0:
             print(f"Execution input:{a} output: {out}")
 
@@ -68,3 +99,52 @@ def redirection_test():
 
 def pipe_test():
     return make_test('pipe Test', call_and_check_template, [('ls -a | grep "."\n', '..')])
+
+def any_number_of_spaces_test():
+    return make_test('Echo with spaces test', call_and_check_template, [('echo                                  "Hello    World!"','Hello    World!')])
+
+def history_test():
+    commands = []
+
+    for _ in range(25):
+        commands.append(('ls -al', 'total'))
+        commands.append(('echo "Hola Mundo"', 'Hola Mundo'))
+
+    commands.append((' echo algo', 'algo'))
+    commands.append(('history | wc -l', '50'))
+    commands.append(('echo algo2', 'algo2'))
+    commands.append(('history | wc -l', '50'))
+
+    print(commands)
+
+    return make_test('history test', call_and_check_template_with_commuinicate, commands)
+
+def command_reutilization_test():
+    commands = []
+
+    for _ in range(25):
+        commands.append(('ls -al', 'total'))
+        commands.append(('echo "test"', 'test'))
+
+    commands.append(('!50', 'test'))
+    commands.append(('!!', 'test'))
+    commands.append(('!l', 'total'))
+
+    return make_test('command reutilization test', call_and_check_template_with_commuinicate, commands)
+
+def multiple_pipes_test():
+    result = []
+
+    result.append(make_test('echo test1', call_and_check_template, [('echo "Hola Mundo" >> file2.txt', '')]))
+    result.append(make_test('echo test2', call_and_check_template, [('echo "mundo" >> file2.txt', '')]))
+    result.append(make_test('echo test3', call_and_check_template, [('echo "pais" >> file2.txt', '')]))
+    result.append(make_test('Multiple Pipes test', call_and_check_template, [(' cat file2.txt | grep o | grep Hola', 'Hola Mundo')]))
+
+    return all(x for x in result)
+
+def jobs_test():
+    result = []
+
+    result.append(make_test('ping test', call_and_check_template, [('ping localhost | grep ttl > archivo &\n jobs | wc -l', '1')]))
+
+    return all(x for x in result)
