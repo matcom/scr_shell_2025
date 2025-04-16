@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple,Deque
 from collections import deque
 from src.ast_tree import Command, Pipe, Job
 import glob
-
+import tempfile
 COLORS = {
     "RESET": "\033[0m",
     "RED": "\033[91m",
@@ -111,7 +111,6 @@ class CommandExecutor:
     def _execute_command(self, cmd: Command) -> int:
         if not cmd.args:
             return 0
-
         if cmd.args[0] == "cd":
             return self._builtin_cd(cmd.args[1:])
         elif cmd.args[0] == "exit":
@@ -228,6 +227,11 @@ class CommandExecutor:
             for cmd in commands:
                 cmd.background = False
 
+      
+        for i, cmd in enumerate(commands):
+            if cmd.args and cmd.args[0] in ["cd", "jobs","history"]:
+                cmd.is_builtin = True
+
         processes = []
         prev_stdout = None
 
@@ -241,7 +245,6 @@ class CommandExecutor:
                         if matches:
                             expanded_args.extend(matches)
                         else:
-                            
                             expanded_args.append(arg)
                     else:
                         expanded_args.append(arg)
@@ -251,10 +254,40 @@ class CommandExecutor:
                 if not cmd.args:
                     continue
 
-               
-                if not cmd.args:
-                    print(f"{COLORS['RED']}Warning: Empty command in pipe at position {i}{COLORS['RESET']}", file=sys.stderr)
-                    continue
+                # Procesar comandos internos con captura de salida
+                if hasattr(cmd, 'is_builtin') and cmd.is_builtin:
+                
+                  
+                    
+                    
+                    temp_out = tempfile.NamedTemporaryFile(mode='w+', delete=False)
+                    temp_name = temp_out.name
+                    
+                    
+                    original_stdout = sys.stdout
+                    sys.stdout = temp_out
+                    
+                    
+                    if cmd.args[0] == "cd":
+                        self._builtin_cd(cmd.args[1:])
+                    elif cmd.args[0] == "exit":
+                        sys.stdout = original_stdout
+                        temp_out.close()
+                        sys.exit(0)
+                    elif cmd.args[0] == "jobs":
+                        self._builtin_jobs()
+                    elif cmd.args[0] == "fg":
+                        self._builtin_fg(cmd.args[1:] if len(cmd.args) > 1 else None)
+                    elif cmd.args[0] == "history":
+                        self._builtin_history(cmd.args[1:] if len(cmd.args) > 1 else None)
+                    
+                   
+                    sys.stdout = original_stdout
+                    temp_out.close()
+                    
+                    
+                    cmd.args = ["cat", temp_name]
+                    cmd.is_temp_file = temp_name
 
                 stdin = prev_stdout
                 
@@ -326,6 +359,14 @@ class CommandExecutor:
                 for p in processes:
                     p.wait()
               
+                # Limpiar archivos temporales creados para los builtins
+                for cmd in commands:
+                    if hasattr(cmd, 'is_temp_file'):
+                        try:
+                            os.unlink(cmd.is_temp_file)
+                        except:
+                            pass
+                
                 if processes:
                     return_code = processes[-1].returncode
                     self.last_return_code = return_code
@@ -338,6 +379,15 @@ class CommandExecutor:
                         p.wait()
                     except (ProcessLookupError, OSError):
                         pass
+                
+                # Limpiar archivos temporales en caso de interrupción
+                for cmd in commands:
+                    if hasattr(cmd, 'is_temp_file'):
+                        try:
+                            os.unlink(cmd.is_temp_file)
+                        except:
+                            pass
+                
                 self.last_return_code = 128 + signal.SIGINT
                 return self.last_return_code
 
