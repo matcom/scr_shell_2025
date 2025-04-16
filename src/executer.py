@@ -64,10 +64,6 @@ class CommandExecutor:
             try:
                 os.kill(job.pid, 0)
             except ProcessLookupError:
-                print(
-                    f"{COLORS['GREEN']}[{job_id}]    terminated    {job.cmd}{COLORS['RESET']}",
-                    flush=True,
-                )
                 del self.jobs[job_id]
 
     def execute(self, node) -> int:
