@@ -227,17 +227,49 @@ class CommandExecutor:
             for cmd in commands:
                 cmd.background = False
 
-      
-        for i, cmd in enumerate(commands):
-            if cmd.args and cmd.args[0] in ["cd", "jobs","history"]:
-                cmd.is_builtin = True
+        temp_files = []
+        for i in range(len(commands)):
+            cmd = commands[i]
+            if not cmd.args:
+                continue
+                
+            if cmd.args[0] in ["cd", "jobs", "history"]:
+                with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp_out:
+                    temp_name = temp_out.name
+                    temp_files.append(temp_name)
+
+                    old_stdout = sys.stdout
+                    sys.stdout = temp_out
+                    
+    
+                    try:
+                        if cmd.args[0] == "cd":
+                            self._builtin_cd(cmd.args[1:])
+                        elif cmd.args[0] == "jobs":
+                            self._builtin_jobs()
+                        elif cmd.args[0] == "history":
+                            self._builtin_history(cmd.args[1:] if len(cmd.args) > 1 else None)
+                    except Exception as e:
+                        sys.stdout = old_stdout
+                        print(f"{COLORS['RED']}Error executing builtin command: {e}{COLORS['RESET']}", 
+                              file=sys.stderr, flush=True)
+                        for f in temp_files:
+                            try:
+                                os.unlink(f)
+                            except:
+                                pass
+                        return 1
+                    finally:
+                    
+                        sys.stdout = old_stdout
+                
+                commands[i] = Command(["cat", temp_name], cmd.redirects, cmd.background)
 
         processes = []
         prev_stdout = None
 
         for i, cmd in enumerate(commands):
             try:
-               
                 expanded_args = []
                 for arg in cmd.args:
                     if '*' in arg or '?' in arg:
@@ -254,43 +286,7 @@ class CommandExecutor:
                 if not cmd.args:
                     continue
 
-                # Procesar comandos internos con captura de salida
-                if hasattr(cmd, 'is_builtin') and cmd.is_builtin:
-                
-                  
-                    
-                    
-                    temp_out = tempfile.NamedTemporaryFile(mode='w+', delete=False)
-                    temp_name = temp_out.name
-                    
-                    
-                    original_stdout = sys.stdout
-                    sys.stdout = temp_out
-                    
-                    
-                    if cmd.args[0] == "cd":
-                        self._builtin_cd(cmd.args[1:])
-                    elif cmd.args[0] == "exit":
-                        sys.stdout = original_stdout
-                        temp_out.close()
-                        sys.exit(0)
-                    elif cmd.args[0] == "jobs":
-                        self._builtin_jobs()
-                    elif cmd.args[0] == "fg":
-                        self._builtin_fg(cmd.args[1:] if len(cmd.args) > 1 else None)
-                    elif cmd.args[0] == "history":
-                        self._builtin_history(cmd.args[1:] if len(cmd.args) > 1 else None)
-                    
-                   
-                    sys.stdout = original_stdout
-                    temp_out.close()
-                    
-                    
-                    cmd.args = ["cat", temp_name]
-                    cmd.is_temp_file = temp_name
-
                 stdin = prev_stdout
-                
                 stdout = subprocess.PIPE if i < len(commands) - 1 else None
                 stderr = None
 
@@ -311,8 +307,12 @@ class CommandExecutor:
                             file=sys.stderr,
                             flush=True,
                         )
+                        for f in temp_files:
+                            try:
+                                os.unlink(f)
+                            except:
+                                pass
                         return 1
-
                 
                 final_stdout = stdout_redir or stdout
                 if i == len(commands) - 1 and final_stdout is None:
@@ -343,8 +343,14 @@ class CommandExecutor:
                 )
                 for p in processes:
                     p.terminate()
-                return 127
 
+                for f in temp_files:
+                    try:
+                        os.unlink(f)
+                    except:
+                        pass
+                return 127
+            
         if background:
             job_id = self.current_job_id
             self.jobs[job_id] = Job(processes[-1].pid, self._ast_to_string(pipe_node))
@@ -358,14 +364,12 @@ class CommandExecutor:
             try:
                 for p in processes:
                     p.wait()
-              
-                # Limpiar archivos temporales creados para los builtins
-                for cmd in commands:
-                    if hasattr(cmd, 'is_temp_file'):
-                        try:
-                            os.unlink(cmd.is_temp_file)
-                        except:
-                            pass
+                
+                for f in temp_files:
+                    try:
+                        os.unlink(f)
+                    except:
+                        pass
                 
                 if processes:
                     return_code = processes[-1].returncode
@@ -380,13 +384,11 @@ class CommandExecutor:
                     except (ProcessLookupError, OSError):
                         pass
                 
-                # Limpiar archivos temporales en caso de interrupción
-                for cmd in commands:
-                    if hasattr(cmd, 'is_temp_file'):
-                        try:
-                            os.unlink(cmd.is_temp_file)
-                        except:
-                            pass
+                for f in temp_files:
+                    try:
+                        os.unlink(f)
+                    except:
+                        pass
                 
                 self.last_return_code = 128 + signal.SIGINT
                 return self.last_return_code
