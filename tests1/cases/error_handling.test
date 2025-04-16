@@ -10,10 +10,7 @@ EXPECT_FAIL: ls | | sort
 EXPECT_FAIL: | ls | sort
 EXPECT_FAIL: ls || sort
 
-# Comandos vacíos
-EXPECT_FAIL: 
-EXPECT_FAIL:      
-
+ 
 # Multiple background symbols
 EXPECT_FAIL: ls & &
 

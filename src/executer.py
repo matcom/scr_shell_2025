@@ -7,6 +7,10 @@ from collections import deque
 from src.ast_tree import Command, Pipe, Job
 import glob
 import tempfile
+
+
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
 COLORS = {
     "RESET": "\033[0m",
     "RED": "\033[91m",
@@ -18,6 +22,22 @@ COLORS = {
     "WHITE": "\033[97m",
     "BRIGHT_CYAN": "\033[1;96m",
 }
+
+
+def safe_print(*args, **kwargs):
+    try:
+        print(*args, **kwargs)
+    except BrokenPipeError:
+        try:
+            sys.stdout.close()
+        except:
+            pass
+        try:
+            sys.stderr.close()
+        except:
+            pass
+        os._exit(0)
+
 class CommandExecutor:
     """
     Clase que representa el ejecutor de comandos.
@@ -41,20 +61,26 @@ class CommandExecutor:
                 for job_id, job in list(self.jobs.items()):
                     if job.pid == pid:
                         if os.WIFEXITED(status):
-                            print(
-                                f"{COLORS['GREEN']}[{job_id}]    done       {job.cmd}{COLORS['RESET']}"
-                            )
-                            del self.jobs[job_id]
-                            print(f"\r{COLORS['GREEN']}$:{COLORS['RESET']} ", end="")
+                            try:
+                                safe_print(
+                                    f"{COLORS['GREEN']}[{job_id}]    done       {job.cmd}{COLORS['RESET']}"
+                                )
+                                del self.jobs[job_id]
+                                safe_print(f"\r{COLORS['GREEN']}$:{COLORS['RESET']} ", end="")
+                            except BrokenPipeError:
+                                pass
                         elif os.WIFSIGNALED(status):
                             sig = os.WTERMSIG(status)
-                            if sig == signal.SIGINT:
-                                print(f"\n[{job_id}]    interrupted    {job.cmd}")
-                            else:
-                                print(
-                                    f"\n[{job_id}]    terminated by signal {sig}    {job.cmd}"
-                                )
-                            del self.jobs[job_id]
+                            try:
+                                if sig == signal.SIGINT:
+                                    safe_print(f"\n[{job_id}]    interrupted    {job.cmd}")
+                                else:
+                                    safe_print(
+                                        f"\n[{job_id}]    terminated by signal {sig}    {job.cmd}"
+                                    )
+                                del self.jobs[job_id]
+                            except BrokenPipeError:
+                                pass
                         elif os.WIFSTOPPED(status):
                             job.status = "stopped"
             except ChildProcessError:
@@ -64,7 +90,14 @@ class CommandExecutor:
             try:
                 os.kill(job.pid, 0)
             except ProcessLookupError:
-                del self.jobs[job_id]
+                try:
+                    safe_print(
+                        f"{COLORS['GREEN']}[{job_id}]    terminated    {job.cmd}{COLORS['RESET']}",
+                        flush=True,
+                    )
+                    del self.jobs[job_id]
+                except BrokenPipeError:
+                    pass
 
     def execute(self, node) -> int:
         try:
@@ -157,7 +190,7 @@ class CommandExecutor:
                 elif r_type == "APPEND":
                     stdout = open(filename, "a")
             except IOError as e:
-                print(
+                safe_print(
                     f"{COLORS['RED']}Cannot open file: {e}{COLORS['RESET']}",
                     file=sys.stderr,
                     flush=True,
@@ -183,7 +216,7 @@ class CommandExecutor:
                 job_id = self.current_job_id
                 self.jobs[job_id] = Job(process.pid, " ".join(args))
                 self.current_job_id += 1
-                print(
+                safe_print(
                     f"{COLORS['CYAN']}[{job_id}] {process.pid}{COLORS['RESET']}",
                     flush=True,
                 )
@@ -199,14 +232,14 @@ class CommandExecutor:
                     self.last_return_code = 128 + signal.SIGINT
                     return self.last_return_code
         except FileNotFoundError:
-            print(
+            safe_print(
                 f"{COLORS['RED']}{args[0]}: command not found{COLORS['RESET']}",
                 file=sys.stderr,
                 flush=True,
             )
             return 127
         except Exception as e:
-            print(
+            safe_print(
                 f"{COLORS['RED']}Error executing command: {e}{COLORS['RESET']}",
                 file=sys.stderr,
                 flush=True,
@@ -241,7 +274,7 @@ class CommandExecutor:
                     old_stdout = sys.stdout
                     sys.stdout = temp_out
                     
-    
+     
                     try:
                         if cmd.args[0] == "cd":
                             self._builtin_cd(cmd.args[1:])
@@ -251,7 +284,7 @@ class CommandExecutor:
                             self._builtin_history(cmd.args[1:] if len(cmd.args) > 1 else None)
                     except Exception as e:
                         sys.stdout = old_stdout
-                        print(f"{COLORS['RED']}Error executing builtin command: {e}{COLORS['RESET']}", 
+                        safe_print(f"{COLORS['RED']}Error executing builtin command: {e}{COLORS['RESET']}", 
                               file=sys.stderr, flush=True)
                         for f in temp_files:
                             try:
@@ -260,7 +293,7 @@ class CommandExecutor:
                                 pass
                         return 1
                     finally:
-                    
+                     
                         sys.stdout = old_stdout
                 
                 commands[i] = Command(["cat", temp_name], cmd.redirects, cmd.background)
@@ -302,7 +335,7 @@ class CommandExecutor:
                         elif r_type == "APPEND" and i == len(commands) - 1:
                             stdout_redir = open(filename, "a")
                     except IOError as e:
-                        print(
+                        safe_print(
                             f"{COLORS['RED']}Cannot open file: {e}{COLORS['RESET']}",
                             file=sys.stderr,
                             flush=True,
@@ -313,7 +346,13 @@ class CommandExecutor:
                             except:
                                 pass
                         return 1
-                
+                    except Exception as e:
+                        safe_print(
+                            f"{COLORS['RED']}Error opening file: {e}{COLORS['RESET']}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        return 1
                 final_stdout = stdout_redir or stdout
                 if i == len(commands) - 1 and final_stdout is None:
                     final_stdout = sys.stdout
@@ -336,26 +375,26 @@ class CommandExecutor:
                 prev_stdout = process.stdout
 
             except FileNotFoundError:
-                print(
+                safe_print(
                     f"{COLORS['RED']}{cmd.args[0]}: command not found {COLORS['RESET']}",
                     file=sys.stderr,
                     flush=True,
                 )
                 for p in processes:
                     p.terminate()
-
+ 
                 for f in temp_files:
                     try:
                         os.unlink(f)
                     except:
                         pass
                 return 127
-            
+              
         if background:
             job_id = self.current_job_id
             self.jobs[job_id] = Job(processes[-1].pid, self._ast_to_string(pipe_node))
             self.current_job_id += 1
-            print(
+            safe_print(
                 f"{COLORS['CYAN']}[{job_id}] {processes[-1].pid}{COLORS['RESET']}",
                 flush=True,
             )
@@ -410,14 +449,14 @@ class CommandExecutor:
             elif args[0] == "-":
 
                 if not hasattr(self, "_prev_dir"):
-                    print(
+                    safe_print(
                         f"{COLORS['RED']}cd: no previous directory{COLORS['RESET']}",
                         file=sys.stderr,
                         flush=True,
                     )
                     return 1
                 new_dir = self._prev_dir
-                print(f"move to => {COLORS['GREEN']}{new_dir}{COLORS['RESET']}")
+                safe_print(f"move to => {COLORS['GREEN']}{new_dir}{COLORS['RESET']}")
             else:
                 new_dir = args[0]
 
@@ -428,18 +467,18 @@ class CommandExecutor:
 
             return 0
         except Exception as e:
-            print(
+            safe_print(
                 f"{COLORS['RED']}cd: {e}{COLORS['RESET']}", file=sys.stderr, flush=True
             )
             return 1
 
     def _builtin_jobs(self) -> int:
         if not self.jobs:
-            print("No background jobs", file=sys.stderr)
+            safe_print("No background jobs", file=sys.stderr)
             return 0
 
         for job_id, job in self.jobs.items():
-            print(
+            safe_print(
                 f"{COLORS['CYAN']}[{job_id}] {job.pid} {job.status} {job.cmd}{COLORS['RESET']}",
                 flush=True,
             )
@@ -447,7 +486,7 @@ class CommandExecutor:
 
     def _builtin_fg(self, args: Optional[List[str]]) -> int:
         if not self.jobs:
-            print(
+            safe_print(
                 f"{COLORS['MAGENTA']}fg: no current job{COLORS['RESET']}",
                 file=sys.stderr,
                 flush=True,
@@ -465,7 +504,7 @@ class CommandExecutor:
 
             job = self.jobs.get(job_id)
             if not job:
-                print(
+                safe_print(
                     f"{COLORS['RED']}fg: {job_id}: no such job{COLORS['RESET']}",
                     file=sys.stderr,
                     flush=True,
@@ -486,21 +525,21 @@ class CommandExecutor:
                 signal.signal(signal.SIGINT, original_sigint)
 
                 if os.WIFEXITED(status):
-                    print(
+                    safe_print(
                         f"{COLORS['GREEN']}[{job_id}]    done       {job.cmd}{COLORS['RESET']}",
                         flush=True,
                     )
                     del self.jobs[job_id]
-                    print(f"\r{COLORS['GREEN']}$:{COLORS['RESET']} ",flush=True)
+                    safe_print(f"\r{COLORS['GREEN']}$:{COLORS['RESET']} ",flush=True)
                 elif os.WIFSIGNALED(status):
                     sig = os.WTERMSIG(status)
                     if sig == signal.SIGINT:
-                        print(
+                        safe_print(
                             f"{COLORS['MAGENTA']}[{job_id}]    interrupted    {job.cmd}{COLORS['RESET']}",
                             flush=True,
                         )
                     else:
-                        print(
+                        safe_print(
                             f"{COLORS['RED']}[{job_id}]    terminated by signal {sig}    {job.cmd} {COLORS['RESET']}",
                             flush=True,
                         )
@@ -510,7 +549,7 @@ class CommandExecutor:
                 return 0
 
             except ProcessLookupError:
-                print(
+                safe_print(
                     f"{COLORS['MAGENTA']}fg: job {job_id} has terminated{COLORS['RESET']}",
                     flush=True,
                     file=sys.stderr,
@@ -518,7 +557,7 @@ class CommandExecutor:
                 del self.jobs[job_id]
                 return 1
         except ValueError:
-            print(
+            safe_print(
                 f"{COLORS['RED']}fg: job ID must be a number{COLORS['RESET']}",
                 file=sys.stderr,
                 flush=True,
@@ -531,7 +570,7 @@ class CommandExecutor:
             limit = min(int(args[0]), len(self.history))
 
         for i, cmd in enumerate(self.history[-limit:] if limit else self.history, 1):
-            print(f"{COLORS['CYAN']}{i:4} {cmd}{COLORS['RESET']} ", flush=True)
+            safe_print(f"{COLORS['CYAN']}{i:4} {cmd}{COLORS['RESET']} ", flush=True)
         return 0
 
     def add_to_history(self, command: str) -> None:
@@ -570,7 +609,7 @@ class CommandExecutor:
 
         if history_part == "!!":
             if not self.history:
-                print("!!: event not found")
+                safe_print("!!: event not found")
                 return None
             base_cmd = self.history[-1]
             return f"{base_cmd}{pipe_suffix}{redirection}"
@@ -578,26 +617,26 @@ class CommandExecutor:
         if history_part.startswith("!") and history_part[1:].isdigit():
             index = int(history_part[1:]) - 1
             if index < 0:
-                print(f"!{history_part[1:]}: event not found")
+                safe_print(f"!{history_part[1:]}: event not found")
                 return None
             if index < len(self.history):
                 base_cmd = self.history[index]
                 return f"{base_cmd}{pipe_suffix}{redirection}"
-            print(f"!{history_part[1:]}: event not found")
+            safe_print(f"!{history_part[1:]}: event not found")
             return None
 
         if history_part.startswith("!"):
             cmd_prefix = history_part[1:]
             
             if not cmd_prefix:
-                print("!: event not found")
+                safe_print("!: event not found")
                 return None
 
             for cmd in reversed(self.history):
                 if cmd.startswith(cmd_prefix):
                     return f"{cmd}{pipe_suffix}{redirection}"
 
-            print(f"!{cmd_prefix}: event not found")
+            safe_print(f"!{cmd_prefix}: event not found")
             return None
 
         return None

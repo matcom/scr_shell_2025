@@ -34,9 +34,7 @@ class ShellParser:
 
     def parse(self) -> Command:
 
-        if not self.tokens:
-            raise SyntaxError("Comando vacío")
-            
+        
         cmd = self.parse_pipe()
 
         if self.peek() == "&":
@@ -76,7 +74,6 @@ class ShellParser:
     def parse_redirect(self) -> Command:
         args = []
         redirects = []
-        found_command = False
 
         while self.pos < len(self.tokens):
             token = self.peek()
@@ -85,7 +82,7 @@ class ShellParser:
                 
                 if not args and not redirects:
                     raise SyntaxError("Redirección de entrada '<' sin comando previo")
-                found_command = True
+           
                 self.consume("<")
                 if self.pos >= len(self.tokens) or self.peek() in ("|", "&", "<", ">", ">>"):
                     raise SyntaxError("Falta archivo de entrada después de '<'")
@@ -94,7 +91,7 @@ class ShellParser:
             elif token == ">":
                 if not args and not redirects:
                     raise SyntaxError("Redirección de salida '>' sin comando previo")
-                found_command = True
+      
                 self.consume(">")
                 if self.pos >= len(self.tokens) or self.peek() in ("|", "&", "<", ">", ">>"):
                     raise SyntaxError("Falta archivo de salida después de '>'")
@@ -103,7 +100,7 @@ class ShellParser:
             elif token == ">>":
                 if not args and not redirects:
                     raise SyntaxError("Redirección de append '>>' sin comando previo")
-                found_command = True
+               
                 self.consume(">>")
                 if self.pos >= len(self.tokens) or self.peek() in ("|", "&", "<", ">", ">>"):
                     raise SyntaxError("Falta archivo de salida después de '>>'")
@@ -113,11 +110,7 @@ class ShellParser:
                 break
             else:
                 args.append(self.consume_any())
-                found_command = True
-
-        if not found_command:
-            raise SyntaxError("Comando vacío")
-            
+                
         return Command(args, redirects, False)
 
     def peek(self) -> str:
