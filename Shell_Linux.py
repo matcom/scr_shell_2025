@@ -86,8 +86,12 @@ def ejecutar_comando(lista_elementos):
         return
     
     if lista_elementos[0] == 'history':
-        for clave, cmd in obtener_historial_como_lista():
-            print(f"{clave}  {cmd}")
+        # Si hay pipe, devolvemos la salida en lugar de imprimirla
+        if len(lista_elementos) > 1 and lista_elementos[1] == '|':
+            return '\n'.join(f"{clave}  {cmd}" for clave, cmd in obtener_historial_como_lista())
+        else:
+            for clave, cmd in obtener_historial_como_lista():
+                print(f"{clave}  {cmd}")
         return
     
     if lista_elementos[0] == 'jobs':
