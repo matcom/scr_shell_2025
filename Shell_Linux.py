@@ -31,10 +31,17 @@ def obtener_historial_como_lista():
 
 
 def analizar_linea_comando(linea):
-    elementos = re.findall(r'>>|[><|&]|[^ ><|&]+', linea)
-    elementos = [elem.strip() for elem in elementos if elem.strip() != '']
-    return elementos
-
+    # Maneja comillas y operadores correctamente
+    elementos = re.findall(r'"[^"]*"|\'[^\']*\'|>>|<<|<|>|\||&|[\w\-\.\/]+', linea)
+    elementos = [elem.strip('"\'') for elem in elementos if elem.strip() != '']
+    # Separa elementos concatenados (ej: 'echo"hola"' -> ['echo', 'hola'])
+    parsed = []
+    for elem in elementos:
+        if re.match(r'^(>>|<<|<|>|\||&)$', elem):
+            parsed.append(elem)
+        else:
+            parsed.extend(re.findall(r'[^"\'\s]+', elem))
+    return parsed
 
 def ejecutar_comando(lista_elementos):
     global trabajos, contador_trabajos
