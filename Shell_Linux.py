@@ -181,6 +181,18 @@ def ejecutar_comando(lista_elementos):
         if proceso_anterior is not None:
             entrada = proceso_anterior.stdout
 
+        try:
+            if i < cantidad_comandos - 1:
+                proc = subprocess.Popen(elementos_nuevos, stdin=entrada,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            else:
+                proc = subprocess.Popen(elementos_nuevos, stdin=entrada,
+                                        stdout=salida if salida else subprocess.PIPE,
+                                        stderr=subprocess.PIPE, text=True)
+        except FileNotFoundError:  # <<< NUEVO MANEJO DE ERRORES
+            print(f"comando no encontrado: {elementos_nuevos[0]}")  # Mensaje útil
+            return
+
         # Para comandos intermedios se crea un pipe para la salida
         if i < cantidad_comandos - 1:
             proc = subprocess.Popen(elementos_nuevos, stdin=entrada,
@@ -200,20 +212,17 @@ def ejecutar_comando(lista_elementos):
         contador_trabajos += 1
     else:
         salida_final, error_final = procesos[-1].communicate()
-        if salida_final:
+        if salida_final and not archivo_salida:  # <<< CONDICIÓN AÑADIDA
             print(salida_final, end='')
         if error_final:
             print(error_final, end='')
-        # Espera a que finalicen los demás procesos del pipeline
         for proc in procesos[:-1]:
             proc.wait()
-        if salida is not None:
+        # CAMBIO: Cierre seguro de archivos
+        if salida:  
             salida.close()
-        if entrada is not None and hasattr(entrada, 'close'):
-            try:
-                entrada.close()
-            except Exception:
-                pass
+        if entrada and not entrada.closed:  
+            entrada.close()
 
 def principal():
     global historial
