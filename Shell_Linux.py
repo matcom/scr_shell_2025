@@ -32,16 +32,43 @@ def obtener_historial_como_lista():
 
 def analizar_linea_comando(linea):
     # Maneja comillas y operadores correctamente
-    elementos = re.findall(r'"[^"]*"|\'[^\']*\'|>>|<<|<|>|\||&|[\w\-\.\/]+', linea)
-    elementos = [elem.strip('"\'') for elem in elementos if elem.strip() != '']
-    # Separa elementos concatenados (ej: 'echo"hola"' -> ['echo', 'hola'])
-    parsed = []
-    for elem in elementos:
-        if re.match(r'^(>>|<<|<|>|\||&)$', elem):
-            parsed.append(elem)
+    elementos = []
+    current = ""
+    in_quotes = None
+    
+    for char in linea:
+        if char in ['"', "'"]:
+            if in_quotes is None:
+                in_quotes = char
+            elif in_quotes == char:
+                in_quotes = None
+            else:
+                current += char
+        elif char in [' ', '\t'] and in_quotes is None:
+            if current:
+                elementos.append(current)
+                current = ""
         else:
-            parsed.extend(re.findall(r'[^"\'\s]+', elem))
-    return parsed
+            current += char
+    
+    if current:
+        elementos.append(current)
+    
+    # Procesa operadores especiales
+    final_elements = []
+    i = 0
+    while i < len(elementos):
+        if elementos[i] in ['>>', '<<', '<', '>', '|', '&']:
+            final_elements.append(elementos[i])
+        else:
+            # Limpia las comillas solo si están al inicio y final
+            elem = elementos[i]
+            if (elem.startswith('"') and elem.endswith('"')) or (elem.startswith("'") and elem.endswith("'")):
+                elem = elem[1:-1]
+            final_elements.append(elem)
+        i += 1
+    
+    return final_elements
 
 def ejecutar_comando(lista_elementos):
     global trabajos, contador_trabajos
@@ -115,7 +142,6 @@ def ejecutar_comando(lista_elementos):
     cantidad_comandos = len(tuberia)
     proceso_anterior = None
 
-
     # Recorre cada comando en el pipeline y gestiona redirecciones
     for i, elementos_comando in enumerate(tuberia):
         archivo_entrada = None
@@ -135,7 +161,7 @@ def ejecutar_comando(lista_elementos):
                     return
             elif elemento == '>':
                 if j + 1 < len(elementos_comando):
-                    archivo_salida = elementos_comando[j + 1].strip('"\'')
+                    archivo_salida = elementos_comando[j + 1]
                     modo_salida = 'w'
                     j += 2
                     continue
@@ -144,8 +170,8 @@ def ejecutar_comando(lista_elementos):
                     return
             elif elemento == '>>':
                 if j + 1 < len(elementos_comando):
-                    archivo_salida = elementos_comando[j + 1].strip('"\'')
-                    modo_salida = 'a'  
+                    archivo_salida = elementos_comando[j + 1]
+                    modo_salida = 'a'
                     j += 2
                     continue
                 else:
@@ -176,7 +202,7 @@ def ejecutar_comando(lista_elementos):
                 if entrada:
                     entrada.close()
                 return
-            
+
         # Si hay un proceso anterior en la tubería, su salida se conecta como entrada
         if proceso_anterior is not None:
             entrada = proceso_anterior.stdout
@@ -184,26 +210,17 @@ def ejecutar_comando(lista_elementos):
         try:
             if i < cantidad_comandos - 1:
                 proc = subprocess.Popen(elementos_nuevos, stdin=entrada,
-                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             else:
                 proc = subprocess.Popen(elementos_nuevos, stdin=entrada,
-                                        stdout=salida if salida else subprocess.PIPE,
-                                        stderr=subprocess.PIPE, text=True)
-        except FileNotFoundError:  # <<< NUEVO MANEJO DE ERRORES
-            print(f"comando no encontrado: {elementos_nuevos[0]}")  # Mensaje útil
+                                      stdout=salida if salida else subprocess.PIPE,
+                                      stderr=subprocess.PIPE, text=True)
+        except FileNotFoundError:
+            print(f"comando no encontrado: {elementos_nuevos[0]}")
             return
 
-        # Para comandos intermedios se crea un pipe para la salida
-        if i < cantidad_comandos - 1:
-            proc = subprocess.Popen(elementos_nuevos, stdin=entrada,
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        else:
-            proc = subprocess.Popen(elementos_nuevos, stdin=entrada,
-                                    stdout=salida if salida is not None else subprocess.PIPE,
-                                    stderr=subprocess.PIPE, text=True)
         procesos.append(proc)
         proceso_anterior = proc
-
 
     # Si se indicó ejecución en segundo plano, se registra el trabajo
     if ejecutar_segundo_plano:
@@ -212,16 +229,15 @@ def ejecutar_comando(lista_elementos):
         contador_trabajos += 1
     else:
         salida_final, error_final = procesos[-1].communicate()
-        if salida_final and not archivo_salida:  # <<< CONDICIÓN AÑADIDA
+        if salida_final and not archivo_salida:
             print(salida_final, end='')
         if error_final:
             print(error_final, end='')
         for proc in procesos[:-1]:
             proc.wait()
-        # CAMBIO: Cierre seguro de archivos
-        if salida:  
+        if salida:
             salida.close()
-        if entrada and not entrada.closed:  
+        if entrada and not entrada.closed:
             entrada.close()
 
 def principal():
