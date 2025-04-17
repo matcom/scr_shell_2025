@@ -140,7 +140,7 @@ def ejecutar_comando(lista_elementos):
                     j += 2
                     continue
                 else:
-                    print("Error: falta el nombre del fichero para redirección de salida")
+                    print("Error: falta nombre de fichero para >")
                     return
             elif elemento == '>>':
                 if j + 1 < len(elementos_comando):
