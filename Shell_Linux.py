@@ -144,8 +144,7 @@ def ejecutar_comando(lista_elementos):
                     return
             elif elemento == '>>':
                 if j + 1 < len(elementos_comando):
-                    archivo_salida = elementos_comando[j + 1]
-                    modo_salida = 'a'
+                    archivo_entrada = elementos_comando[j + 1].strip('"\'')  
                     j += 2
                     continue
                 else:
@@ -191,6 +190,7 @@ def ejecutar_comando(lista_elementos):
                                     stderr=subprocess.PIPE, text=True)
         procesos.append(proc)
         proceso_anterior = proc
+
 
     # Si se indicó ejecución en segundo plano, se registra el trabajo
     if ejecutar_segundo_plano:
