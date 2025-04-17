@@ -144,11 +144,12 @@ def ejecutar_comando(lista_elementos):
                     return
             elif elemento == '>>':
                 if j + 1 < len(elementos_comando):
-                    archivo_entrada = elementos_comando[j + 1].strip('"\'')  
+                    archivo_salida = elementos_comando[j + 1].strip('"\'')
+                    modo_salida = 'a'  
                     j += 2
                     continue
                 else:
-                    print("Error: falta el nombre del fichero para redirección de salida")
+                    print("Error: falta nombre de fichero para >>")
                     return
             else:
                 elementos_nuevos.append(elemento)
