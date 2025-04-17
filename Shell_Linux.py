@@ -86,9 +86,15 @@ def ejecutar_comando(lista_elementos):
         return
     
     if lista_elementos[0] == 'history':
-        # Si hay pipe, devolvemos la salida en lugar de imprimirla
+        # Si hay pipe, creamos un proceso para el comando history
         if len(lista_elementos) > 1 and lista_elementos[1] == '|':
-            return '\n'.join(f"{clave}  {cmd}" for clave, cmd in obtener_historial_como_lista())
+            # Creamos un proceso que emula el comando history
+            proc = subprocess.Popen(['echo'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            # Escribimos el historial en el stdin del proceso
+            history_output = '\n'.join(f"{clave}  {cmd}" for clave, cmd in obtener_historial_como_lista())
+            proc.stdin.write(history_output)
+            proc.stdin.close()
+            return proc
         else:
             for clave, cmd in obtener_historial_como_lista():
                 print(f"{clave}  {cmd}")
