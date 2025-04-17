@@ -135,7 +135,7 @@ def ejecutar_comando(lista_elementos):
                     return
             elif elemento == '>':
                 if j + 1 < len(elementos_comando):
-                    archivo_salida = elementos_comando[j + 1]
+                    archivo_salida = elementos_comando[j + 1].strip('"\'')
                     modo_salida = 'w'
                     j += 2
                     continue
