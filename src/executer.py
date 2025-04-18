@@ -601,7 +601,7 @@ class CommandExecutor:
 
         redirection = ""
 
-        for op in [">", ">>", "<"]:
+        for op in [">>",">","<"]:
             if op in arg:
                 parts = arg.split(op, 1)
                 if len(parts) > 1:
