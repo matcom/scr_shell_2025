@@ -1,7 +1,6 @@
 import os 
 import re
 import sys
-#import shlex
 import subprocess
 from collections import OrderedDict
 
@@ -15,7 +14,6 @@ def espacio_tokens(comando):
     return comando.strip()
 
 def split_con_comillas(comando):
-    #return shlex.split(comando)
     tokens = []
     token_actual = ""
     dentro_comillas_dobles = False
