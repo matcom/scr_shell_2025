@@ -2,7 +2,7 @@ import os
 import signal
 import subprocess
 import sys
-from typing import Dict, List, Optional, Tuple,Deque
+from typing import Dict, List, Optional, Tuple, Deque
 from collections import deque
 from src.ast_tree import Command, Pipe, Job
 import glob
@@ -38,10 +38,12 @@ def safe_print(*args, **kwargs):
             pass
         os._exit(0)
 
+
 class CommandExecutor:
     """
     Clase que representa el ejecutor de comandos.
     """
+
     def __init__(self) -> None:
         self.env = os.environ.copy()
         self.last_return_code = 0
@@ -66,14 +68,18 @@ class CommandExecutor:
                                     f"{COLORS['GREEN']}[{job_id}]    done       {job.cmd}{COLORS['RESET']}"
                                 )
                                 del self.jobs[job_id]
-                                safe_print(f"\r{COLORS['GREEN']}$:{COLORS['RESET']} ", end="")
+                                safe_print(
+                                    f"\r{COLORS['GREEN']}$:{COLORS['RESET']} ", end=""
+                                )
                             except BrokenPipeError:
                                 pass
                         elif os.WIFSIGNALED(status):
                             sig = os.WTERMSIG(status)
                             try:
                                 if sig == signal.SIGINT:
-                                    safe_print(f"\n[{job_id}]    interrupted    {job.cmd}")
+                                    safe_print(
+                                        f"\n[{job_id}]    interrupted    {job.cmd}"
+                                    )
                                 else:
                                     safe_print(
                                         f"\n[{job_id}]    terminated by signal {sig}    {job.cmd}"
@@ -162,16 +168,16 @@ class CommandExecutor:
     ) -> int:
         expanded_args = []
         for arg in args:
-            if '*' in arg or '?' in arg:
+            if "*" in arg or "?" in arg:
                 matches = glob.glob(arg)
                 if matches:
                     expanded_args.extend(matches)
                 else:
-                  
+
                     expanded_args.append(arg)
             else:
                 expanded_args.append(arg)
-        
+
         args = expanded_args
 
         if not args:
@@ -209,7 +215,7 @@ class CommandExecutor:
                 preexec_fn=os.setsid,
                 universal_newlines=True,
                 text=True,
-                encoding='utf-8',
+                encoding="utf-8",
             )
 
             if background:
@@ -265,27 +271,31 @@ class CommandExecutor:
             cmd = commands[i]
             if not cmd.args:
                 continue
-                
+
             if cmd.args[0] in ["cd", "jobs", "history"]:
-                with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp_out:
+                with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_out:
                     temp_name = temp_out.name
                     temp_files.append(temp_name)
 
                     old_stdout = sys.stdout
                     sys.stdout = temp_out
-                    
-     
+
                     try:
                         if cmd.args[0] == "cd":
                             self._builtin_cd(cmd.args[1:])
                         elif cmd.args[0] == "jobs":
                             self._builtin_jobs()
                         elif cmd.args[0] == "history":
-                            self._builtin_history(cmd.args[1:] if len(cmd.args) > 1 else None)
+                            self._builtin_history(
+                                cmd.args[1:] if len(cmd.args) > 1 else None
+                            )
                     except Exception as e:
                         sys.stdout = old_stdout
-                        safe_print(f"{COLORS['RED']}Error executing builtin command: {e}{COLORS['RESET']}", 
-                              file=sys.stderr, flush=True)
+                        safe_print(
+                            f"{COLORS['RED']}Error executing builtin command: {e}{COLORS['RESET']}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
                         for f in temp_files:
                             try:
                                 os.unlink(f)
@@ -293,9 +303,9 @@ class CommandExecutor:
                                 pass
                         return 1
                     finally:
-                     
+
                         sys.stdout = old_stdout
-                
+
                 commands[i] = Command(["cat", temp_name], cmd.redirects, cmd.background)
 
         processes = []
@@ -305,7 +315,7 @@ class CommandExecutor:
             try:
                 expanded_args = []
                 for arg in cmd.args:
-                    if '*' in arg or '?' in arg:
+                    if "*" in arg or "?" in arg:
                         matches = glob.glob(arg)
                         if matches:
                             expanded_args.extend(matches)
@@ -313,7 +323,7 @@ class CommandExecutor:
                             expanded_args.append(arg)
                     else:
                         expanded_args.append(arg)
-                
+
                 cmd.args = expanded_args
 
                 if not cmd.args:
@@ -382,14 +392,14 @@ class CommandExecutor:
                 )
                 for p in processes:
                     p.terminate()
- 
+
                 for f in temp_files:
                     try:
                         os.unlink(f)
                     except:
                         pass
                 return 127
-              
+
         if background:
             job_id = self.current_job_id
             self.jobs[job_id] = Job(processes[-1].pid, self._ast_to_string(pipe_node))
@@ -403,13 +413,13 @@ class CommandExecutor:
             try:
                 for p in processes:
                     p.wait()
-                
+
                 for f in temp_files:
                     try:
                         os.unlink(f)
                     except:
                         pass
-                
+
                 if processes:
                     return_code = processes[-1].returncode
                     self.last_return_code = return_code
@@ -422,13 +432,13 @@ class CommandExecutor:
                         p.wait()
                     except (ProcessLookupError, OSError):
                         pass
-                
+
                 for f in temp_files:
                     try:
                         os.unlink(f)
                     except:
                         pass
-                
+
                 self.last_return_code = 128 + signal.SIGINT
                 return self.last_return_code
 
@@ -530,7 +540,7 @@ class CommandExecutor:
                         flush=True,
                     )
                     del self.jobs[job_id]
-                    safe_print(f"\r{COLORS['GREEN']}$:{COLORS['RESET']} ",flush=True)
+                    safe_print(f"\r{COLORS['GREEN']}$:{COLORS['RESET']} ", flush=True)
                 elif os.WIFSIGNALED(status):
                     sig = os.WTERMSIG(status)
                     if sig == signal.SIGINT:
@@ -590,20 +600,19 @@ class CommandExecutor:
             return None
 
         redirection = ""
-        
 
-        for op in ['>', '>>', '<']:
+        for op in [">", ">>", "<"]:
             if op in arg:
                 parts = arg.split(op, 1)
                 if len(parts) > 1:
                     arg = parts[0].strip()
                     redirection = f"{op}{parts[1]}"
                     break
-                    
-        pipe_parts = arg.split('|', 1)
+
+        pipe_parts = arg.split("|", 1)
         history_part = pipe_parts[0].strip()
-        pipe_suffix = ''
-        
+        pipe_suffix = ""
+
         if len(pipe_parts) > 1:
             pipe_suffix = f" | {pipe_parts[1].strip()}"
 
@@ -627,7 +636,7 @@ class CommandExecutor:
 
         if history_part.startswith("!"):
             cmd_prefix = history_part[1:]
-            
+
             if not cmd_prefix:
                 safe_print("!: event not found")
                 return None
@@ -640,4 +649,3 @@ class CommandExecutor:
             return None
 
         return None
-       

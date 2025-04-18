@@ -3,8 +3,8 @@
 import sys
 import os
 from src.lexer import ShellLexer
-from src.parser import ShellParser  
-from src.executer import CommandExecutor, COLORS
+from src.parser import ShellParser
+from src.executer import CommandExecutor, COLORS, safe_print
 
 """def sms():
     def get_system_info():
@@ -104,10 +104,12 @@ from src.executer import CommandExecutor, COLORS
     inspirational_msg = f"{COLORS['MAGENTA']}✨ Bienvenido  ✨{COLORS['RESET']}"
     padding = (term_width - len(inspirational_msg) + len(COLORS['MAGENTA']) + len(COLORS['RESET'])) // 2
     print("\n" + " " * padding + inspirational_msg + "\n")"""
+
+
 def main_loop() -> None:
     executor = CommandExecutor()
-    #sms()
-    
+    # sms()
+
     while True:
         try:
             prompt = f"\r{COLORS['GREEN']}$:{COLORS['RESET']} "
@@ -125,42 +127,41 @@ def main_loop() -> None:
                 continue
             if not line:
                 continue
-                
+
             line2 = line[:].strip()
-            
+
             if line2.startswith("!"):
                 history_cmd = executor.get_history_command(line2)
-                if history_cmd:
-                    line = history_cmd
-                    print(line)
-                else:
-                    print(
+                if not history_cmd:
+                    safe_print(
                         f"{COLORS['MAGENTA']}Command not found in history: {line} {COLORS['RESET']}",
                         file=sys.stderr,
                         flush=True,
                     )
                     continue
+                line = history_cmd
+                safe_print(line, flush=True)
 
             executor.add_to_history(line)
 
             try:
-                    lexer = ShellLexer()
-                    tokens = lexer.tokenize(line)
-                    parser = ShellParser(tokens)
-                    ast = parser.parse()
-                    executor.execute(ast)
+                lexer = ShellLexer()
+                tokens = lexer.tokenize(line)
+                parser = ShellParser(tokens)
+                ast = parser.parse()
+                executor.execute(ast)
             except KeyboardInterrupt:
                 print()
                 continue
             except SyntaxError as e:
-                print(
+                safe_print(
                     f"{COLORS['RED']}Syntax error: {e} {COLORS['RESET']}",
                     flush=True,
                     file=sys.stderr,
                 )
                 executor.last_return_code = 1
             except Exception as e:
-                print(
+                safe_print(
                     f"{COLORS['RED']}Error: {e} {COLORS['RESET']}",
                     flush=True,
                     file=sys.stderr,
