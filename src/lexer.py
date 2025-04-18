@@ -5,6 +5,7 @@ class ShellLexer:
     """
     Clase que representa el lexer de la shell.
     """
+
     def __init__(self) -> None:
         self.tokens = []
         self.current_token = ""
@@ -12,7 +13,7 @@ class ShellLexer:
         self.quote_char = ""
 
     def tokenize(self, line: str) -> List[str]:
-        
+
         i = 0
         while i < len(line):
             char = line[i]

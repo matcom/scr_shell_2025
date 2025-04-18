@@ -5,6 +5,7 @@ class Command:
     """
     Clase que representa un comando en el AST.
     """
+
     def __init__(
         self,
         args: List[str],
@@ -23,7 +24,8 @@ class Pipe:
     """
     Clase que representa un pipe en el AST.
     """
-    def __init__(self, left:Command, right:Command) -> None:
+
+    def __init__(self, left: Command, right: Command) -> None:
         self.left = left
         self.right = right
 
@@ -35,11 +37,12 @@ class Job:
     """
     Clase que representa un job en el AST.
     """
+
     def __init__(self, pid: int, cmd: str, status: str = "running") -> None:
-        self.pid = pid  
-        self.cmd = cmd  
-        self.status = status  
-        self.pids = [pid] 
+        self.pid = pid
+        self.cmd = cmd
+        self.status = status
+        self.pids = [pid]
 
     def __repr__(self) -> str:
         return f"Job(pid=({self.pid}), cmd=({self.cmd}), status=({self.status}), pids=({self.pids}))"

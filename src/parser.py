@@ -6,35 +6,36 @@ class ShellParser:
     """
     Clase que representa el parser de la shell.
     """
+
     def __init__(self, tokens: List[str]) -> None:
         self.tokens = tokens
         self.pos = 0
-     
-        if self.tokens:    
+
+        if self.tokens:
             self._validate_token()
 
-       
     def _validate_token(self) -> None:
         if not self.tokens:
             return
-        
+
         for i, token in enumerate(self.tokens):
             if token == "&" and i < len(self.tokens) - 1:
                 raise SyntaxError(f"Token '&' solo puede aparecer al final del comando")
-                       
-        if self.tokens[0] in ("<", ">", ">>","|"):
-            raise SyntaxError(f"No se puede comenzar un comando con el token '{self.tokens[0]}'")
-           
+
+        if self.tokens[0] in ("<", ">", ">>", "|"):
+            raise SyntaxError(
+                f"No se puede comenzar un comando con el token '{self.tokens[0]}'"
+            )
+
         if self.tokens[-1] == "|":
             raise SyntaxError("No se puede terminar un comando con el token '|'")
-            
+
         for i in range(len(self.tokens) - 1):
-            if self.tokens[i] == "|" and self.tokens[i+1] == "|":
+            if self.tokens[i] == "|" and self.tokens[i + 1] == "|":
                 raise SyntaxError("No se permiten tokens '|' consecutivos")
 
     def parse(self) -> Command:
 
-        
         cmd = self.parse_pipe()
 
         if self.peek() == "&":
@@ -46,12 +47,12 @@ class ShellParser:
         return cmd
 
     def _mark_pipe_background(self, pipe_node) -> None:
-        
+
         if isinstance(pipe_node.left, Pipe):
             self._mark_pipe_background(pipe_node.left)
         else:
             pipe_node.left.background = True
-            
+
         if isinstance(pipe_node.right, Pipe):
             self._mark_pipe_background(pipe_node.right)
         else:
@@ -79,30 +80,48 @@ class ShellParser:
             token = self.peek()
 
             if token == "<":
-                
+
                 if not args and not redirects:
                     raise SyntaxError("Redirección de entrada '<' sin comando previo")
-           
+
                 self.consume("<")
-                if self.pos >= len(self.tokens) or self.peek() in ("|", "&", "<", ">", ">>"):
+                if self.pos >= len(self.tokens) or self.peek() in (
+                    "|",
+                    "&",
+                    "<",
+                    ">",
+                    ">>",
+                ):
                     raise SyntaxError("Falta archivo de entrada después de '<'")
                 file = self.consume_any()
                 redirects.append(("IN", file))
             elif token == ">":
                 if not args and not redirects:
                     raise SyntaxError("Redirección de salida '>' sin comando previo")
-      
+
                 self.consume(">")
-                if self.pos >= len(self.tokens) or self.peek() in ("|", "&", "<", ">", ">>"):
+                if self.pos >= len(self.tokens) or self.peek() in (
+                    "|",
+                    "&",
+                    "<",
+                    ">",
+                    ">>",
+                ):
                     raise SyntaxError("Falta archivo de salida después de '>'")
                 file = self.consume_any()
                 redirects.append(("OUT", file))
             elif token == ">>":
                 if not args and not redirects:
                     raise SyntaxError("Redirección de append '>>' sin comando previo")
-               
+
                 self.consume(">>")
-                if self.pos >= len(self.tokens) or self.peek() in ("|", "&", "<", ">", ">>"):
+                if self.pos >= len(self.tokens) or self.peek() in (
+                    "|",
+                    "&",
+                    "<",
+                    ">",
+                    ">>",
+                ):
                     raise SyntaxError("Falta archivo de salida después de '>>'")
                 file = self.consume_any()
                 redirects.append(("APPEND", file))
@@ -110,7 +129,7 @@ class ShellParser:
                 break
             else:
                 args.append(self.consume_any())
-                
+
         return Command(args, redirects, False)
 
     def peek(self) -> str:
