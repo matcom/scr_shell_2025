@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # scr_shell_2025
 Repositorio para la entrega del 1mer proyecto de la asignatura Sistemas Computacionales y Redes, correspondientes al curso 2025.
 
@@ -48,3 +49,6 @@ y hasta aquí tienen 3 puntos en el proyecto
 
 
    Fecha de entrega: Domingo 20 de abril 11:59:59 PM. Mediante un issue o PR en el presente repositorio.
+=======
+# SCR_Shell
+>>>>>>> project-a/main
