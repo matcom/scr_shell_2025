@@ -5,177 +5,199 @@ import readline
 historial_comandos = []
 background_jobs = []
 
-def mostrar_prompt():
-    print("} ", end="", flush=True)
-
-def cambiar_directorio(comando):
-    if len(comando) < 2:
-        print("\033[31m" + "Error: se requiere un directorio.\033[0m")
-    else:
-        try:
-            os.chdir(comando[1])
-        except FileNotFoundError:
-            print(f"\033[31m" + f"Error: directorio '{comando[1]}' no encontrado.\033[0m")
-
-def redirigir_salida(comando):
+def cambiar_directorio(args):
+    if len(args) < 2:
+        print("\033[31mError: se requiere un directorio.\033[0m")
+        return
     try:
-        if ">" in comando:
-            index = comando.index(">")
-            salida = comando[index + 1]
-            subprocess.run(comando[:index], stdout=open(salida, 'w'))
-        elif ">>" in comando:
-            index = comando.index(">>")
-            salida = comando[index + 1]
-            subprocess.run(comando[:index], stdout=open(salida, 'a'))
+        os.chdir(args[1])
+    except FileNotFoundError:
+        print("\033[31mError: directorio '" + args[1] + "' no encontrado.\033[0m")
+
+def redirigir_salida(tokens):
+    try:
+        if ">" in tokens:
+            idx = tokens.index(">")
+            nombre = tokens[idx + 1]
+            archivo = open(nombre, "w")
+            subprocess.run(tokens[:idx], stdout=archivo)
+            archivo.close()
+        elif ">>" in tokens:
+            idx = tokens.index(">>")
+            nombre = tokens[idx + 1]
+            archivo = open(nombre, "a")
+            subprocess.run(tokens[:idx], stdout=archivo)
+            archivo.close()
     except Exception as e:
-        print("\033[31m" + f"Error al redirigir salida: {e}\033[0m")
+        print("\033[31mError al redirigir salida: " + str(e) + "\033[0m")
 
-def redirigir_entrada(comando):
+def redirigir_entrada(tokens):
     try:
-        if "<" in comando:
-            index = comando.index("<")
-            entrada = comando[index + 1]
-            subprocess.run(comando[:index], stdin=open(entrada, 'r'))
+        if "<" in tokens:
+            idx = tokens.index("<")
+            nombre = tokens[idx + 1]
+            archivo = open(nombre, "r")
+            subprocess.run(tokens[:idx], stdin=archivo)
+            archivo.close()
     except Exception as e:
-        print("\033[31m" + f"Error al redirigir entrada: {e}\033[0m")
+        print("\033[31mError al redirigir entrada: " + str(e) + "\033[0m")
 
-def ejecutar_pipe(comando):
+def ejecutar_pipe(partes):
+    procesos = []
+    for parte in partes:
+        procesos.append(parte.split())
     try:
-        comandos = [com.split() for com in comando]
-        p = subprocess.Popen(comandos[0], stdout=subprocess.PIPE)
-
-        for i in range(1, len(comandos) - 1):
-            p2 = subprocess.Popen(comandos[i], stdin=p.stdout, stdout=subprocess.PIPE)
-            p.stdout.close()
-            p = p2
-
-        p3 = subprocess.Popen(comandos[-1], stdin=p.stdout)
-        p.stdout.close()
-        p3.communicate()
+        primero = subprocess.Popen(procesos[0], stdout=subprocess.PIPE)
+        actual = primero
+        i = 1
+        while i < len(procesos):
+            p = subprocess.Popen(procesos[i], stdin=actual.stdout, stdout=subprocess.PIPE)
+            actual.stdout.close()
+            actual = p
+            i += 1
+        salida, _ = actual.communicate()
+        if salida:
+            print(salida.decode(), end="")
     except Exception:
-        print("\033[31m" + "Error al ejecutar pipe.\033[0m")
-
-def ejecutar_historial():
-    global historial_comandos
-    entrada = input().strip()
-
-    if entrada and (entrada != historial_comandos[-1] if historial_comandos else True) and not entrada.startswith(" "):
-        historial_comandos.append(entrada)
-
-    return historial_comandos
-
-def reutilizar_comando(comando):
-    global historial_comandos
-    if comando.startswith("!"):
-        if comando == "!!":
-            if historial_comandos:
-                return historial_comandos[-1]
-            else:
-                return "\033[31m" + "Error: No hay comandos en el historial.\033[0m"
-        else:
-            try:
-                index = int(comando[1:])
-                if index <= len(historial_comandos):
-                    return historial_comandos[index-1]
-                else:
-                    return "\033[31m" + "Error: No hay comando en la posición solicitada del historial.\033[0m"
-            except ValueError:
-                return "\033[31m" + "Error: Se esperaba un número después de '!'.\033[0m"
-    return comando
+        print("\033[31mError al ejecutar pipe.\033[0m")
 
 def mostrar_historial():
-    global historial_comandos
-    if historial_comandos:
-        for i in range(len(historial_comandos)):
-            print(f"{i + 1}: {historial_comandos[i]}")
-    else:
-        print("\033[31m" + "No hay comandos en el historial.\033[0m")
+    total = len(historial_comandos)
+    inicio = total - 50
+    if inicio < 0:
+        inicio = 0
+    if total == 0:
+        print("\033[31mNo hay comandos en el historial.\033[0m")
+        return
+    i = inicio
+    while i < total:
+        num = i + 1
+        print(str(num) + ": " + historial_comandos[i])
+        i += 1
 
-def ejecutar_background(comando):
+def ejecutar_background(tokens):
     try:
-        p = subprocess.Popen(comando)
+        p = subprocess.Popen(tokens)
         background_jobs.append(p)
-        return p
     except Exception:
-        print("\033[31m" + "Error al ejecutar en segundo plano.\033[0m")
+        print("\033[31mError al ejecutar en segundo plano.\033[0m")
 
 def jobs():
-    if background_jobs:
-        for i in range(len(background_jobs)):
-            print(f"[{i + 1}] PID: {background_jobs[i].pid}")
-    else:
-        print("\033[31m" + "No hay trabajos en segundo plano.\033[0m")
+    if len(background_jobs) == 0:
+        print("\033[31mNo hay trabajos en segundo plano.\033[0m")
+        return
+    id = 1
+    for trabajo in background_jobs:
+        print("[" + str(id) + "] PID: " + str(trabajo.pid))
+        id += 1
 
-def fg(job_id):
+def fg(args):
+    if len(args) < 2:
+        print("\033[31mError: Se debe especificar un ID de trabajo.\033[0m")
+        return
     try:
-        job_id = int(job_id) - 1
-        if 0 <= job_id < len(background_jobs):
-            job = background_jobs[job_id]
-            job.wait()
-            background_jobs.remove(job)
-        else:
-            print("\033[31m" + f"Error: No hay trabajo con ID {job_id + 1}.\033[0m")
+        idx = int(args[1]) - 1
     except ValueError:
-        print("\033[31m" + "Error: ID de trabajo no válido.\033[0m")
+        print("\033[31mError: ID de trabajo no válido.\033[0m")
+        return
+    if idx < 0 or idx >= len(background_jobs):
+        print("\033[31mError: No hay trabajo con ID " + str(idx + 1) + ".\033[0m")
+        return
+    trabajo = background_jobs[idx]
+    trabajo.wait()
+    background_jobs.remove(trabajo)
 
 def comando_no_reconocido():
-    return "\033[31m" + "Error: Comando no reconocido.\033[0m"
+    print("\033[31mError: Comando no reconocido.\033[0m")
 
 def ejecutar_shell():
+    readline.set_history_length(1000)
     while True:
-        mostrar_prompt()
-        entrada = input().strip()
-
-        if entrada == 'exit':
+        try:
+            linea = input("} ")
+        except EOFError:
+            print()
             break
 
-        if entrada == 'history':
+        if linea == "!!":
+            if len(historial_comandos) == 0:
+                print("\033[31mError: No hay comandos en el historial.\033[0m")
+                continue
+            linea = historial_comandos[-1]
+
+        elif linea.startswith("!"):
+            resto = linea[1:]
+            if resto.isdigit():
+                n = int(resto)
+                total = len(historial_comandos)
+                if n < 1 or n > total:
+                    print("\033[31mError: solo hay " + str(total) + " comandos en el historial.\033[0m")
+                    continue
+                linea = historial_comandos[n-1]
+            else:
+                print("\033[31mError: comando histórico no soportado.\033[0m")
+                continue
+
+        if linea == "":
+            continue
+
+        if linea.count('"') % 2 != 0 or linea.count("'") % 2 != 0:
+            print("\033[31mError: comillas sin cerrar.\033[0m")
+            continue
+
+        if not linea.startswith(" "):
+            ultimo = None
+            if len(historial_comandos) > 0:
+                ultimo = historial_comandos[-1]
+            if linea != ultimo:
+                historial_comandos.append(linea)
+                if len(historial_comandos) > 50:
+                    del historial_comandos[0]
+                readline.add_history(linea)
+
+        if linea == "exit":
+            break
+
+        if linea == "history":
             mostrar_historial()
             continue
 
-        if entrada == 'jobs':
-            jobs()  
+        if linea == "jobs":
+            jobs()
             continue
 
-        if entrada.startswith('!'):
-            entrada = reutilizar_comando(entrada)
-            if entrada.startswith("\033[31m"):
-                print(entrada)  
-                continue
-
-        historial_comandos.append(entrada)
-
-        if entrada.endswith('&'):
-            entrada = entrada[:-1].strip()
-            comando = entrada.split(' ')
-            ejecutar_background(comando)
+        if linea.endswith("&"):
+            comandos = linea[:-1].strip().split()
+            ejecutar_background(comandos)
             continue
 
-        if '|' in entrada:
-            comando = entrada.split('|')
-            ejecutar_pipe(comando)
-        elif '>' in entrada:
-            comando = entrada.split(' ')
-            redirigir_salida(comando)
-        elif '<' in entrada:
-            comando = entrada.split(' ')
-            redirigir_entrada(comando)
-        elif 'cd' in entrada:
-            comando = entrada.split(' ')
-            cambiar_directorio(comando)
-        elif entrada.startswith("fg"):
-            job_id = entrada.split(" ")[1] if len(entrada.split(" ")) > 1 else None
-            if job_id:
-                fg(job_id)
-            else:
-                print("\033[31m" + "Error: Se debe especificar un ID de trabajo.\033[0m")
-        else:
-            comando = entrada.split(' ')
-            try:
-                subprocess.run(comando, check=True)
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                print(comando_no_reconocido())
+        if "|" in linea:
+            partes = linea.split("|")
+            ejecutar_pipe(partes)
+            continue
+
+        if ">" in linea:
+            comandos = linea.split()
+            redirigir_salida(comandos)
+            continue
+
+        if "<" in linea:
+            comandos = linea.split()
+            redirigir_entrada(comandos)
+            continue
+
+        tokens = linea.split()
+        if tokens[0] == "cd":
+            cambiar_directorio(tokens)
+            continue
+        if tokens[0] == "fg":
+            fg(tokens)
+            continue
+
+        try:
+            subprocess.run(tokens)
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            comando_no_reconocido()
 
 if __name__ == "__main__":
-    readline.set_history_length(1000)
     ejecutar_shell()
