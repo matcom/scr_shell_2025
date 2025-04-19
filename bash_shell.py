@@ -109,10 +109,8 @@ def mostrar_historial():
     if total == 0:
         print("\033[31mNo hay comandos en el historial.\033[0m")
         return
-    i = inicio
-    while i < total:
+    for i in range(inicio, total):
         print(str(i+1) + ": " + historial_comandos[i])
-        i += 1
 
 def ejecutar_background(tokens):
     try:
@@ -125,12 +123,8 @@ def jobs():
     if len(background_jobs) == 0:
         print("\033[31mNo hay trabajos en segundo plano.\033[0m")
         return
-    k = 0
-    id = 1
-    while k < len(background_jobs):
-        print("[" + str(id) + "] PID: " + str(background_jobs[k].pid))
-        k += 1
-        id += 1
+    for idx, p in enumerate(background_jobs, start=1):
+        print("[" + str(idx) + "] PID: " + str(p.pid))
 
 def fg(args):
     if len(args) < 2:
@@ -146,7 +140,7 @@ def fg(args):
         return
     bg = background_jobs[idx]
     bg.wait()
-    background_jobs.remove(bg)
+    background_jobs.pop(idx)
 
 def comando_no_reconocido():
     print("\033[31mError: Comando no reconocido.\033[0m")
@@ -209,12 +203,12 @@ def ejecutar_shell():
         if linea == "jobs":
             jobs()
             continue
+        if "|" in linea:
+            ejecutar_pipe(linea)
+            continue
         if linea.endswith("&"):
             cmd = shlex.split(linea[:-1])
             ejecutar_background(cmd)
-            continue
-        if "|" in linea:
-            ejecutar_pipe(linea)
             continue
         tokens = shlex.split(linea)
         if ">" in tokens or ">>" in tokens:
@@ -223,7 +217,7 @@ def ejecutar_shell():
         if "<" in tokens:
             redirigir_entrada(tokens)
             continue
-        if len(tokens) == 0:
+        if not tokens:
             continue
         if tokens[0] == "cd":
             cambiar_directorio(tokens)
