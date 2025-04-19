@@ -2,6 +2,8 @@ import os
 import subprocess
 import readline
 import shlex
+import sys
+from io import StringIO
 
 historial_comandos = []
 background_jobs = []
@@ -47,26 +49,49 @@ def redirigir_entrada(tokens):
         print("\033[31mError al redirigir entrada: " + str(e) + "\033[0m")
 
 def ejecutar_pipe(linea):
-    partes_str = linea.split("|")
+    bg = False
+    if linea.strip().endswith("&"):
+        bg = True
+        linea = linea.rstrip()[:-1].rstrip()
+    partes = [p.strip() for p in linea.split("|")]
+    datos = None
+    if partes and partes[0].split()[0] == "jobs":
+        buf = StringIO()
+        old = sys.stdout
+        sys.stdout = buf
+        jobs()
+        sys.stdout = old
+        datos = buf.getvalue().encode()
+        partes = partes[1:]
     procesos = []
     i = 0
-    while i < len(partes_str):
-        procesos.append(shlex.split(partes_str[i]))
+    while i < len(partes):
+        tokens = shlex.split(partes[i])
+        try:
+            if i == 0:
+                if datos is not None:
+                    proc = subprocess.Popen(tokens, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                    proc.stdin.write(datos)
+                    proc.stdin.close()
+                else:
+                    proc = subprocess.Popen(tokens, stdout=subprocess.PIPE)
+            else:
+                proc = subprocess.Popen(tokens, stdin=procesos[-1].stdout, stdout=subprocess.PIPE)
+                procesos[-1].stdout.close()
+            procesos.append(proc)
+        except Exception:
+            print("\033[31mError al ejecutar pipe.\033[0m")
+            return
         i += 1
-    try:
-        primero = subprocess.Popen(procesos[0], stdout=subprocess.PIPE)
-        actual = primero
-        j = 1
-        while j < len(procesos):
-            p = subprocess.Popen(procesos[j], stdin=actual.stdout, stdout=subprocess.PIPE)
-            actual.stdout.close()
-            actual = p
-            j += 1
-        salida, _ = actual.communicate()
+    if not procesos:
+        return
+    ultimo = procesos[-1]
+    if bg:
+        background_jobs.append(ultimo)
+    else:
+        salida, _ = ultimo.communicate()
         if salida:
-            print(salida.decode(), end = "")
-    except Exception:
-        print("\033[31mError al ejecutar pipe.\033[0m")
+            print(salida.decode(), end="")
 
 def mostrar_historial():
     total = len(historial_comandos)
@@ -78,8 +103,7 @@ def mostrar_historial():
         return
     i = inicio
     while i < total:
-        num = i + 1
-        print(str(num) + ": " + historial_comandos[i])
+        print(str(i+1) + ": " + historial_comandos[i])
         i += 1
 
 def ejecutar_background(tokens):
@@ -110,7 +134,7 @@ def fg(args):
         print("\033[31mError: ID de trabajo no válido.\033[0m")
         return
     if idx < 0 or idx >= len(background_jobs):
-        print("\033[31mError: No hay trabajo con ID " + str(idx + 1) + ".\033[0m")
+        print("\033[31mError: No hay trabajo con ID " + str(idx+1) + ".\033[0m")
         return
     bg = background_jobs[idx]
     bg.wait()
@@ -127,23 +151,19 @@ def ejecutar_shell():
         except EOFError:
             print()
             break
-
         if linea == "":
             continue
-
         while linea.count('"') % 2 != 0 or linea.count("'") % 2 != 0:
             try:
                 cont = input("> ")
             except EOFError:
                 break
             linea += "\n" + cont
-
         if linea == "!!":
             if len(historial_comandos) == 0:
                 print("\033[31mError: No hay comandos en el historial.\033[0m")
                 continue
             linea = historial_comandos[-1]
-
         elif linea.startswith("!"):
             key = linea[1:]
             if key == "":
@@ -166,58 +186,43 @@ def ejecutar_shell():
                 if not encontrado:
                     print("\033[31mError: comando histórico no soportado.\033[0m")
                     continue
-
         if not linea.startswith(" "):
-            ultimo = None
-            if len(historial_comandos) > 0:
-                ultimo = historial_comandos[-1]
+            ultimo = historial_comandos[-1] if historial_comandos else None
             if linea != ultimo:
                 historial_comandos.append(linea)
                 if len(historial_comandos) > 50:
                     del historial_comandos[0]
                 readline.add_history(linea)
-
         if linea == "exit":
             break
-
         if linea == "history":
             mostrar_historial()
             continue
-
         if linea == "jobs":
             jobs()
             continue
-
         if linea.endswith("&"):
             cmd = shlex.split(linea[:-1])
             ejecutar_background(cmd)
             continue
-
         if "|" in linea:
             ejecutar_pipe(linea)
             continue
-
         tokens = shlex.split(linea)
-
         if ">" in tokens or ">>" in tokens:
             redirigir_salida(tokens)
             continue
-
         if "<" in tokens:
             redirigir_entrada(tokens)
             continue
-
         if len(tokens) == 0:
             continue
-
         if tokens[0] == "cd":
             cambiar_directorio(tokens)
             continue
-
         if tokens[0] == "fg":
             fg(tokens)
             continue
-
         try:
             subprocess.run(tokens)
         except (FileNotFoundError, subprocess.CalledProcessError):
