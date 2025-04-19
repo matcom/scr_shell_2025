@@ -1,6 +1,8 @@
 import os
 import subprocess
 
+historial_comandos = []
+
 def mostrar_prompt():
     print("} ", end="")
 
@@ -32,11 +34,35 @@ def ejecutar_pipe(comando):
     p1.stdout.close()
     p2.communicate()
 
+def ejecutar_historial():
+    global historial_comandos
+    historial_comandos.append(input())
+    return historial_comandos
+
+def reutilizar_comando(comando):
+    global historial_comandos
+    if comando.startswith("!"):
+        if comando == "!!":
+            return historial_comandos[-1] if historial_comandos else ""
+        elif comando.startswith("!"):
+            index = int(comando[1:])
+            if index <= len(historial_comandos):
+                return historial_comandos[index-1]
+    return comando
+
 def ejecutar_shell():
     while True:
         mostrar_prompt()
         entrada = input()
         comando = entrada.split(' ')
+
+        if entrada == 'exit':
+            break
+
+        if entrada.startswith('!'):
+            entrada = reutilizar_comando(entrada)
+
+        historial_comandos = ejecutar_historial()
 
         if comando[0] == 'cd':
             cambiar_directorio(comando)
