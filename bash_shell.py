@@ -1,6 +1,7 @@
 import os
 import subprocess
 import readline
+import shlex
 
 historial_comandos = []
 background_jobs = []
@@ -16,48 +17,54 @@ def cambiar_directorio(args):
 
 def redirigir_salida(tokens):
     try:
-        if ">" in tokens:
-            idx = tokens.index(">")
-            nombre = tokens[idx + 1]
-            archivo = open(nombre, "w")
-            subprocess.run(tokens[:idx], stdout=archivo)
-            archivo.close()
-        elif ">>" in tokens:
-            idx = tokens.index(">>")
-            nombre = tokens[idx + 1]
-            archivo = open(nombre, "a")
-            subprocess.run(tokens[:idx], stdout=archivo)
-            archivo.close()
+        i = 0
+        while i < len(tokens):
+            if tokens[i] == ">" or tokens[i] == ">>":
+                modo = tokens[i]
+                nombre = tokens[i+1]
+                archivo = open(nombre, "a" if modo == ">>" else "w")
+                cmd = tokens[:i]
+                subprocess.run(cmd, stdout=archivo)
+                archivo.close()
+                return
+            i += 1
     except Exception as e:
         print("\033[31mError al redirigir salida: " + str(e) + "\033[0m")
 
 def redirigir_entrada(tokens):
     try:
-        if "<" in tokens:
-            idx = tokens.index("<")
-            nombre = tokens[idx + 1]
-            archivo = open(nombre, "r")
-            subprocess.run(tokens[:idx], stdin=archivo)
-            archivo.close()
+        i = 0
+        while i < len(tokens):
+            if tokens[i] == "<":
+                nombre = tokens[i+1]
+                archivo = open(nombre, "r")
+                cmd = tokens[:i]
+                subprocess.run(cmd, stdin=archivo)
+                archivo.close()
+                return
+            i += 1
     except Exception as e:
         print("\033[31mError al redirigir entrada: " + str(e) + "\033[0m")
 
-def ejecutar_pipe(partes):
+def ejecutar_pipe(linea):
+    partes_str = linea.split("|")
     procesos = []
-    for parte in partes:
-        procesos.append(parte.split())
+    i = 0
+    while i < len(partes_str):
+        procesos.append(shlex.split(partes_str[i]))
+        i += 1
     try:
         primero = subprocess.Popen(procesos[0], stdout=subprocess.PIPE)
         actual = primero
-        i = 1
-        while i < len(procesos):
-            p = subprocess.Popen(procesos[i], stdin=actual.stdout, stdout=subprocess.PIPE)
+        j = 1
+        while j < len(procesos):
+            p = subprocess.Popen(procesos[j], stdin=actual.stdout, stdout=subprocess.PIPE)
             actual.stdout.close()
             actual = p
-            i += 1
+            j += 1
         salida, _ = actual.communicate()
         if salida:
-            print(salida.decode(), end="")
+            print(salida.decode(), end = "")
     except Exception:
         print("\033[31mError al ejecutar pipe.\033[0m")
 
@@ -86,9 +93,11 @@ def jobs():
     if len(background_jobs) == 0:
         print("\033[31mNo hay trabajos en segundo plano.\033[0m")
         return
+    k = 0
     id = 1
-    for trabajo in background_jobs:
-        print("[" + str(id) + "] PID: " + str(trabajo.pid))
+    while k < len(background_jobs):
+        print("[" + str(id) + "] PID: " + str(background_jobs[k].pid))
+        k += 1
         id += 1
 
 def fg(args):
@@ -103,9 +112,9 @@ def fg(args):
     if idx < 0 or idx >= len(background_jobs):
         print("\033[31mError: No hay trabajo con ID " + str(idx + 1) + ".\033[0m")
         return
-    trabajo = background_jobs[idx]
-    trabajo.wait()
-    background_jobs.remove(trabajo)
+    bg = background_jobs[idx]
+    bg.wait()
+    background_jobs.remove(bg)
 
 def comando_no_reconocido():
     print("\033[31mError: Comando no reconocido.\033[0m")
@@ -119,6 +128,13 @@ def ejecutar_shell():
             print()
             break
 
+        if linea == "":
+            continue
+
+        if linea.count('"') % 2 != 0 or linea.count("'") % 2 != 0:
+            print("\033[31mError: comillas sin cerrar.\033[0m")
+            continue
+
         if linea == "!!":
             if len(historial_comandos) == 0:
                 print("\033[31mError: No hay comandos en el historial.\033[0m")
@@ -126,9 +142,9 @@ def ejecutar_shell():
             linea = historial_comandos[-1]
 
         elif linea.startswith("!"):
-            resto = linea[1:]
-            if resto.isdigit():
-                n = int(resto)
+            n_str = linea[1:]
+            if n_str.isdigit():
+                n = int(n_str)
                 total = len(historial_comandos)
                 if n < 1 or n > total:
                     print("\033[31mError: solo hay " + str(total) + " comandos en el historial.\033[0m")
@@ -137,13 +153,6 @@ def ejecutar_shell():
             else:
                 print("\033[31mError: comando histórico no soportado.\033[0m")
                 continue
-
-        if linea == "":
-            continue
-
-        if linea.count('"') % 2 != 0 or linea.count("'") % 2 != 0:
-            print("\033[31mError: comillas sin cerrar.\033[0m")
-            continue
 
         if not linea.startswith(" "):
             ultimo = None
@@ -167,29 +176,31 @@ def ejecutar_shell():
             continue
 
         if linea.endswith("&"):
-            comandos = linea[:-1].strip().split()
-            ejecutar_background(comandos)
+            cmd = shlex.split(linea[:-1])
+            ejecutar_background(cmd)
             continue
 
         if "|" in linea:
-            partes = linea.split("|")
-            ejecutar_pipe(partes)
+            ejecutar_pipe(linea)
             continue
 
-        if ">" in linea:
-            comandos = linea.split()
-            redirigir_salida(comandos)
+        tokens = shlex.split(linea)
+
+        if ">" in tokens or ">>" in tokens:
+            redirigir_salida(tokens)
             continue
 
-        if "<" in linea:
-            comandos = linea.split()
-            redirigir_entrada(comandos)
+        if "<" in tokens:
+            redirigir_entrada(tokens)
             continue
 
-        tokens = linea.split()
+        if len(tokens) == 0:
+            continue
+
         if tokens[0] == "cd":
             cambiar_directorio(tokens)
             continue
+
         if tokens[0] == "fg":
             fg(tokens)
             continue
