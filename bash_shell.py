@@ -142,17 +142,27 @@ def ejecutar_shell():
             linea = historial_comandos[-1]
 
         elif linea.startswith("!"):
-            n_str = linea[1:]
-            if n_str.isdigit():
-                n = int(n_str)
-                total = len(historial_comandos)
+            key = linea[1:]
+            if key == "":
+                comando_no_reconocido()
+                continue
+            total = len(historial_comandos)
+            if key.isdigit():
+                n = int(key)
                 if n < 1 or n > total:
                     print("\033[31mError: solo hay " + str(total) + " comandos en el historial.\033[0m")
                     continue
                 linea = historial_comandos[n-1]
             else:
-                print("\033[31mError: comando histórico no soportado.\033[0m")
-                continue
+                encontrado = False
+                for cmd in reversed(historial_comandos):
+                    if cmd.startswith(key):
+                        linea = cmd
+                        encontrado = True
+                        break
+                if not encontrado:
+                    print("\033[31mError: comando histórico no soportado.\033[0m")
+                    continue
 
         if not linea.startswith(" "):
             ultimo = None
