@@ -127,84 +127,57 @@ def ejecutar_shell():
         except EOFError:
             print()
             break
-
         if linea == "":
             continue
-
-        if linea.count('"') % 2 != 0 or linea.count("'") % 2 != 0:
-            print("\033[31mError: comillas sin cerrar.\033[0m")
+        buffer = linea
+        while buffer.count('"') % 2 != 0 or buffer.count("'") % 2 != 0:
+            try:
+                cont = input("> ")
+            except EOFError:
+                print("\033[31mError: comillas sin cerrar.\033[0m")
+                buffer = ""
+                break
+            buffer += "\n" + cont
+        if not buffer:
             continue
-
-        if linea == "!!":
-            if len(historial_comandos) == 0:
-                print("\033[31mError: No hay comandos en el historial.\033[0m")
-                continue
-            linea = historial_comandos[-1]
-
-        elif linea.startswith("!"):
-            n_str = linea[1:]
-            if n_str.isdigit():
-                n = int(n_str)
-                total = len(historial_comandos)
-                if n < 1 or n > total:
-                    print("\033[31mError: solo hay " + str(total) + " comandos en el historial.\033[0m")
-                    continue
-                linea = historial_comandos[n-1]
-            else:
-                print("\033[31mError: comando histórico no soportado.\033[0m")
-                continue
-
+        linea = buffer
         if not linea.startswith(" "):
-            ultimo = None
-            if len(historial_comandos) > 0:
-                ultimo = historial_comandos[-1]
+            ultimo = historial_comandos[-1] if historial_comandos else None
             if linea != ultimo:
                 historial_comandos.append(linea)
                 if len(historial_comandos) > 50:
                     del historial_comandos[0]
                 readline.add_history(linea)
-
         if linea == "exit":
             break
-
         if linea == "history":
             mostrar_historial()
             continue
-
         if linea == "jobs":
             jobs()
             continue
-
         if linea.endswith("&"):
             cmd = shlex.split(linea[:-1])
             ejecutar_background(cmd)
             continue
-
         if "|" in linea:
             ejecutar_pipe(linea)
             continue
-
         tokens = shlex.split(linea)
-
         if ">" in tokens or ">>" in tokens:
             redirigir_salida(tokens)
             continue
-
         if "<" in tokens:
             redirigir_entrada(tokens)
             continue
-
-        if len(tokens) == 0:
+        if not tokens:
             continue
-
         if tokens[0] == "cd":
             cambiar_directorio(tokens)
             continue
-
         if tokens[0] == "fg":
             fg(tokens)
             continue
-
         try:
             subprocess.run(tokens)
         except (FileNotFoundError, subprocess.CalledProcessError):
