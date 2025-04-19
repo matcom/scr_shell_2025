@@ -24,7 +24,7 @@ def redirigir_salida(tokens):
                 nombre = tokens[i+1]
                 archivo = open(nombre, "a" if modo == ">>" else "w")
                 cmd = tokens[:i]
-                subprocess.run(cmd, stdout=archivo)
+                subprocess.run(cmd, stdout=archivo, stderr=subprocess.DEVNULL)
                 archivo.close()
                 return
             i += 1
@@ -39,7 +39,7 @@ def redirigir_entrada(tokens):
                 nombre = tokens[i+1]
                 archivo = open(nombre, "r")
                 cmd = tokens[:i]
-                subprocess.run(cmd, stdin=archivo)
+                subprocess.run(cmd, stdin=archivo, stderr=subprocess.DEVNULL)
                 archivo.close()
                 return
             i += 1
@@ -54,11 +54,11 @@ def ejecutar_pipe(linea):
         procesos.append(shlex.split(partes_str[i]))
         i += 1
     try:
-        primero = subprocess.Popen(procesos[0], stdout=subprocess.PIPE)
+        primero = subprocess.Popen(procesos[0], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         actual = primero
         j = 1
         while j < len(procesos):
-            p = subprocess.Popen(procesos[j], stdin=actual.stdout, stdout=subprocess.PIPE)
+            p = subprocess.Popen(procesos[j], stdin=actual.stdout, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             actual.stdout.close()
             actual = p
             j += 1
@@ -84,7 +84,7 @@ def mostrar_historial():
 
 def ejecutar_background(tokens):
     try:
-        p = subprocess.Popen(tokens)
+        p = subprocess.Popen(tokens, stderr=subprocess.DEVNULL)
         background_jobs.append(p)
     except Exception:
         print("\033[31mError al ejecutar en segundo plano.\033[0m")
@@ -179,7 +179,7 @@ def ejecutar_shell():
             fg(tokens)
             continue
         try:
-            subprocess.run(tokens)
+            subprocess.run(tokens, check=True, stderr=subprocess.DEVNULL)
         except (FileNotFoundError, subprocess.CalledProcessError):
             comando_no_reconocido()
 
