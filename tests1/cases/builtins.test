@@ -1,0 +1,26 @@
+# Test cases for built-in commands
+# Basic directory operations
+cd /tmp
+pwd
+cd -
+pwd
+# History functionality - just test the command exists
+history
+
+# Background jobs with shorter timeouts
+sleep 2 &
+# Then check jobs list
+jobs
+# Try simple ls
+ls -la
+
+# Background jobs with builtin commands
+# Commented out - could cause unpredictable behavior
+# cd /tmp &
+
+# Test help or version - these don't exist but could be implemented
+# help
+# version
+
+# Test exit functionality - should be the last test but commented out
+# exit 

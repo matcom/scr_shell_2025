@@ -1,3 +1,4 @@
+
 # scr_shell_2025
 Repositorio para la entrega del 1mer proyecto de la asignatura Sistemas Computacionales y Redes, correspondientes al curso 2025.
 

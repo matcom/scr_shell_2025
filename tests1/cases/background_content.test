@@ -1,0 +1,67 @@
+# Test para verificar el contenido generado por procesos en segundo plano
+
+# Limpieza inicial
+rm -f /tmp/bg_*.txt
+
+# 1. Proceso simple en segundo plano que genera un archivo
+echo "Contenido inicial" > /tmp/bg_test1.txt &
+
+# Esperar brevemente para que el proceso termine
+sleep 1
+
+# Verificar que el archivo se creó correctamente
+ls -la /tmp/bg_test1.txt
+cat /tmp/bg_test1.txt | grep "Contenido inicial"
+
+# 2. Proceso de redirección en segundo plano
+echo "Línea 1" > /tmp/bg_test2.txt
+echo "Línea 2" >> /tmp/bg_test2.txt &
+
+# Esperar brevemente
+sleep 1
+
+# Verificar el contenido
+cat /tmp/bg_test2.txt | grep "Línea 1"
+cat /tmp/bg_test2.txt | grep "Línea 2"
+
+# 3. Tubería en segundo plano con redirección
+cat /tmp/bg_test1.txt | grep "Contenido" > /tmp/bg_pipe.txt &
+
+# Esperar brevemente
+sleep 1
+
+# Verificar contenido
+cat /tmp/bg_pipe.txt | grep "Contenido"
+
+# 4. Múltiples operaciones en segundo plano
+echo "Test 1" > /tmp/bg_multi_1.txt &
+echo "Test 2" > /tmp/bg_multi_2.txt &
+echo "Test 3" > /tmp/bg_multi_3.txt &
+
+# Esperar brevemente
+sleep 1
+
+# Verificar todos los archivos
+cat /tmp/bg_multi_1.txt | grep "Test 1"
+cat /tmp/bg_multi_2.txt | grep "Test 2" 
+cat /tmp/bg_multi_3.txt | grep "Test 3"
+
+# 5. Tubería compleja en segundo plano
+cat uno 1 primero
+dos 2 segundo
+tres 3 tercero
+cuatro 4 cuarto
+cinco 5 quinto
+EOF> /tmp/bg_data.txt 
+
+
+cat /tmp/bg_data.txt | grep "o" | sort | head -n 2 > /tmp/bg_result.txt &
+
+# Esperar brevemente
+sleep 1
+
+# Verificar resultado
+cat /tmp/bg_result.txt | wc -l | grep "2"
+
+# 6. Limpieza final
+rm -f /tmp/bg_*.txt 

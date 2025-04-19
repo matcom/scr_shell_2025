@@ -1,0 +1,20 @@
+# Test para errores de redirección sin comando previo
+# Estos comandos deberían fallar porque la redirección no tiene comando previo
+EXPECT_FAIL: < archivo.txt
+EXPECT_FAIL: > archivo.txt
+EXPECT_FAIL: >> archivo.txt
+
+# Estos comandos deberían fallar porque la redirección no tiene archivo
+EXPECT_FAIL: ls <
+EXPECT_FAIL: ls >
+EXPECT_FAIL: ls >>
+
+# Comandos válidos de redirección (para verificar que el test funciona)
+echo "prueba" > /tmp/prueba.txt
+cat < /tmp/prueba.txt
+ls > /tmp/ls_output.txt
+echo "otra línea" >> /tmp/prueba.txt
+
+# Limpieza
+rm /tmp/prueba.txt
+rm /tmp/ls_output.txt 
