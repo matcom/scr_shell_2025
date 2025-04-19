@@ -23,13 +23,12 @@ def redirigir_salida(tokens):
                 modo = tokens[i]
                 nombre = tokens[i+1]
                 archivo = open(nombre, "a" if modo == ">>" else "w")
-                cmd = tokens[:i]
-                subprocess.run(cmd, stdout=archivo, stderr=subprocess.DEVNULL, check=True)
+                subprocess.run(tokens[:i], stdout=archivo)
                 archivo.close()
                 return
             i += 1
-    except Exception:
-        print("\033[31mError: Comando no reconocido.\033[0m")
+    except Exception as e:
+        print("\033[31mError al redirigir salida: " + str(e) + "\033[0m")
 
 def redirigir_entrada(tokens):
     try:
@@ -38,13 +37,12 @@ def redirigir_entrada(tokens):
             if tokens[i] == "<":
                 nombre = tokens[i+1]
                 archivo = open(nombre, "r")
-                cmd = tokens[:i]
-                subprocess.run(cmd, stdin=archivo, stderr=subprocess.DEVNULL, check=True)
+                subprocess.run(tokens[:i], stdin=archivo)
                 archivo.close()
                 return
             i += 1
-    except Exception:
-        print("\033[31mError: Comando no reconocido.\033[0m")
+    except Exception as e:
+        print("\033[31mError al redirigir entrada: " + str(e) + "\033[0m")
 
 def ejecutar_pipe(linea):
     partes = linea.split("|")
@@ -54,11 +52,11 @@ def ejecutar_pipe(linea):
         procesos.append(shlex.split(partes[i]))
         i += 1
     try:
-        primero = subprocess.Popen(procesos[0], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        primero = subprocess.Popen(procesos[0], stdout=subprocess.PIPE)
         actual = primero
         j = 1
         while j < len(procesos):
-            p = subprocess.Popen(procesos[j], stdin=actual.stdout, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            p = subprocess.Popen(procesos[j], stdin=actual.stdout, stdout=subprocess.PIPE)
             actual.stdout.close()
             actual = p
             j += 1
@@ -66,7 +64,7 @@ def ejecutar_pipe(linea):
         if salida:
             print(salida.decode(), end="")
     except Exception:
-        print("\033[31mError: Comando no reconocido.\033[0m")
+        print("\033[31mError al ejecutar pipe.\033[0m")
 
 def mostrar_historial():
     total = len(historial_comandos)
@@ -83,10 +81,10 @@ def mostrar_historial():
 
 def ejecutar_background(tokens):
     try:
-        p = subprocess.Popen(tokens, stderr=subprocess.DEVNULL)
+        p = subprocess.Popen(tokens)
         background_jobs.append(p)
     except Exception:
-        print("\033[31mError: Comando no reconocido.\033[0m")
+        print("\033[31mError al ejecutar en segundo plano.\033[0m")
 
 def jobs():
     if len(background_jobs) == 0:
@@ -133,10 +131,8 @@ def ejecutar_shell():
         except EOFError:
             print()
             break
-
         if linea == "":
             continue
-
         if linea == "!!":
             if len(historial_comandos) == 0:
                 print("\033[31mError: No hay comandos en el historial.\033[0m")
@@ -154,7 +150,6 @@ def ejecutar_shell():
             else:
                 print("\033[31mError: comando histórico no soportado.\033[0m")
                 continue
-
         if not linea.startswith(" "):
             ultimo = None
             if len(historial_comandos) > 0:
@@ -164,7 +159,6 @@ def ejecutar_shell():
                 if len(historial_comandos) > 50:
                     del historial_comandos[0]
                 readline.add_history(linea)
-
         if linea == "exit":
             break
         if linea == "history":
@@ -180,7 +174,6 @@ def ejecutar_shell():
         if "|" in linea:
             ejecutar_pipe(linea)
             continue
-
         tokens = shlex.split(linea)
         if ">" in tokens or ">>" in tokens:
             redirigir_salida(tokens)
@@ -188,7 +181,6 @@ def ejecutar_shell():
         if "<" in tokens:
             redirigir_entrada(tokens)
             continue
-
         if len(tokens) == 0:
             continue
         if tokens[0] == "cd":
@@ -197,10 +189,9 @@ def ejecutar_shell():
         if tokens[0] == "fg":
             fg(tokens)
             continue
-
         try:
-            subprocess.run(tokens, check=True, stderr=subprocess.DEVNULL)
-        except Exception:
+            subprocess.run(tokens)
+        except (FileNotFoundError, subprocess.CalledProcessError):
             comando_no_reconocido()
 
 if __name__ == "__main__":
