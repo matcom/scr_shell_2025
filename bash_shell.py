@@ -63,10 +63,21 @@ def ejecutar_pipe(linea):
         sys.stdout = old
         datos = buf.getvalue().encode()
         partes = partes[1:]
+    if datos is not None and len(partes) == 1:
+        tokens = shlex.split(partes[0])
+        try:
+            proc = subprocess.Popen(tokens, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            salida, _ = proc.communicate(input=datos)
+            if not bg and salida:
+                print(salida.decode(), end="")
+            if bg:
+                background_jobs.append(proc)
+        except Exception:
+            print("\033[31mError al ejecutar pipe.\033[0m")
+        return
     procesos = []
-    i = 0
-    while i < len(partes):
-        tokens = shlex.split(partes[i])
+    for i, parte in enumerate(partes):
+        tokens = shlex.split(parte)
         try:
             if i == 0:
                 if datos is not None:
@@ -82,9 +93,6 @@ def ejecutar_pipe(linea):
         except Exception:
             print("\033[31mError al ejecutar pipe.\033[0m")
             return
-        i += 1
-    if not procesos:
-        return
     ultimo = procesos[-1]
     if bg:
         background_jobs.append(ultimo)
