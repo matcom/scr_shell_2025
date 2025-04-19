@@ -131,9 +131,12 @@ def ejecutar_shell():
         if linea == "":
             continue
 
-        if linea.count('"') % 2 != 0 or linea.count("'") % 2 != 0:
-            print("\033[31mError: comillas sin cerrar.\033[0m")
-            continue
+        while linea.count('"') % 2 != 0 or linea.count("'") % 2 != 0:
+            try:
+                cont = input("> ")
+            except EOFError:
+                break
+            linea += "\n" + cont
 
         if linea == "!!":
             if len(historial_comandos) == 0:
