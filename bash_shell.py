@@ -160,39 +160,56 @@ def ejecutar_tuberias(cmd, fondo):
     partes = cmd.split('|')
     canal = None
     ultimo = None
-    i = 0
-    while i < len(partes):
-        seg = partes[i].strip()
+    for i, seg in enumerate(partes):
+        seg = seg.strip()
         args, ent, sal, anex = parsear_redireccion(seg)
-        if len(args) == 0:
+        if not args:
             return
+        if args[0] in ('cd', 'history', 'jobs', 'fg'):
+            out = ''
+            if args[0] == 'cd':
+                if len(args) > 1:
+                    cd(args[1])
+                else:
+                    cd(os.path.expanduser('~'))
+            elif args[0] == 'history':
+                out = '\n'.join(f'{n} {h}' for n, h in enumerate(historia, 1))
+                if out:
+                    out += '\n'
+            elif args[0] == 'jobs':
+                out = '\n'.join(c for p, c in trabajos)
+                if out:
+                    out += '\n'
+            elif args[0] == 'fg':
+                if trabajos:
+                    p, c = trabajos.pop(0)
+                    p.wait()
+            canal = out
+            continue
         if canal is not None:
-            stdin = subprocess.PIPE
+            stdin_pipe = subprocess.PIPE
         else:
             if ent:
                 try:
-                    stdin = open(ent, 'r')
-                except:
+                    stdin_pipe = open(ent, 'r')
+                except FileNotFoundError:
                     print(f'{ent}: no existe')
                     return
             else:
-                stdin = None
+                stdin_pipe = None
         if i < len(partes) - 1:
-            stdout = subprocess.PIPE
+            stdout_pipe = subprocess.PIPE
         else:
             if sal:
                 modo = 'a' if anex else 'w'
-                stdout = open(sal, modo)
+                stdout_pipe = open(sal, modo)
             else:
-                if fondo:
-                    stdout = subprocess.DEVNULL
-                else:
-                    stdout = subprocess.PIPE
+                stdout_pipe = subprocess.DEVNULL if fondo else subprocess.PIPE
         try:
             p = subprocess.Popen(
                 args,
-                stdin=stdin,
-                stdout=stdout,
+                stdin=stdin_pipe,
+                stdout=stdout_pipe,
                 stderr=subprocess.PIPE,
                 text=True
             )
@@ -200,14 +217,13 @@ def ejecutar_tuberias(cmd, fondo):
             print(f'{args[0]}: comando no encontrado')
             return
         if canal is not None:
-            p.stdin.write(canal)
-            p.stdin.close()
-        out, _ = p.communicate()
+            out, _ = p.communicate(input=canal)
+        else:
+            out, _ = p.communicate()
         if i == len(partes) - 1 and out:
             print(out, end='')
         canal = out
         ultimo = p
-        i += 1
     if fondo and ultimo:
         trabajos.append((ultimo, cmd))
 
