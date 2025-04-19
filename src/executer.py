@@ -373,8 +373,9 @@ class CommandExecutor:
                     stdout=final_stdout,
                     stderr=stderr,
                     env=self.env,
-                    universal_newlines=True,
+                    text=True,
                     preexec_fn=os.setsid,
+                    encoding="utf-8",
                 )
 
                 processes.append(process)
@@ -601,7 +602,7 @@ class CommandExecutor:
 
         redirection = ""
 
-        for op in [">>",">","<"]:
+        for op in [">>", ">", "<"]:
             if op in arg:
                 parts = arg.split(op, 1)
                 if len(parts) > 1:
