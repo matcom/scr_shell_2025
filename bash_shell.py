@@ -50,56 +50,97 @@ def redirigir_entrada(tokens):
 
 def ejecutar_pipe(linea):
     bg = False
-    if linea.strip().endswith("&"):
+    temp = linea.rstrip()
+    if temp.endswith("&"):
         bg = True
-        linea = linea.rstrip()[:-1].rstrip()
-    partes = [p.strip() for p in linea.split("|")]
+        temp = temp[:-1].rstrip()
+    tokens = shlex.split(temp)
+    file_in = None
+    file_out = None
+    modo = 'w'
+    clean = []
+    i = 0
+    while i < len(tokens):
+        if tokens[i] == '<' and i+1 < len(tokens):
+            file_in = tokens[i+1]
+            i += 2
+        elif tokens[i] == '>' and i+1 < len(tokens):
+            file_out = tokens[i+1]
+            modo = 'w'
+            i += 2
+        elif tokens[i] == '>>' and i+1 < len(tokens):
+            file_out = tokens[i+1]
+            modo = 'a'
+            i += 2
+        else:
+            clean.append(tokens[i])
+            i += 1
+    segments = []
+    segment = []
+    for tok in clean:
+        if tok == '|':
+            segments.append(segment)
+            segment = []
+        else:
+            segment.append(tok)
+    segments.append(segment)
     datos = None
-    if partes and partes[0].split()[0] == "jobs":
+    if segments and segments[0] and segments[0][0] == 'jobs':
         buf = StringIO()
         old = sys.stdout
         sys.stdout = buf
         jobs()
         sys.stdout = old
         datos = buf.getvalue().encode()
-        partes = partes[1:]
-    if datos is not None and len(partes) == 1:
-        tokens = shlex.split(partes[0])
-        try:
-            proc = subprocess.Popen(tokens, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            salida, _ = proc.communicate(input=datos)
-            if not bg and salida:
-                print(salida.decode(), end="")
-            if bg:
-                background_jobs.append(proc)
-        except Exception:
-            print("\033[31mError al ejecutar pipe.\033[0m")
-        return
+        segments = segments[1:]
+        if not segments:
+            if not bg:
+                print(buf.getvalue(), end="")
+            return
     procesos = []
-    for i, parte in enumerate(partes):
-        tokens = shlex.split(parte)
-        try:
-            if i == 0:
-                if datos is not None:
-                    proc = subprocess.Popen(tokens, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-                    proc.stdin.write(datos)
-                    proc.stdin.close()
-                else:
-                    proc = subprocess.Popen(tokens, stdout=subprocess.PIPE)
+    prev = None
+    for idx, cmd in enumerate(segments):
+        stdin = None
+        stdout = None
+        if idx == 0:
+            if datos is not None:
+                stdin = subprocess.PIPE
+            elif file_in:
+                stdin = open(file_in, 'r')
+        if idx == len(segments) - 1:
+            if file_out:
+                stdout = open(file_out, modo)
             else:
-                proc = subprocess.Popen(tokens, stdin=procesos[-1].stdout, stdout=subprocess.PIPE)
-                procesos[-1].stdout.close()
-            procesos.append(proc)
-        except Exception:
+                stdout = subprocess.PIPE
+        else:
+            stdout = subprocess.PIPE
+        try:
+            proc = subprocess.Popen(cmd, stdin=stdin or (prev.stdout if prev else None), stdout=stdout)
+        except:
             print("\033[31mError al ejecutar pipe.\033[0m")
             return
-    ultimo = procesos[-1]
+        if prev and prev.stdout:
+            prev.stdout.close()
+        if datos is not None and idx == 0:
+            proc.stdin.write(datos)
+            proc.stdin.close()
+        procesos.append(proc)
+        prev = proc
+    last = procesos[-1]
     if bg:
-        background_jobs.append(ultimo)
+        background_jobs.append(last)
     else:
-        salida, _ = ultimo.communicate()
-        if salida:
-            print(salida.decode(), end="")
+        if file_out:
+            last.wait()
+        else:
+            out, _ = last.communicate()
+            if out:
+                print(out.decode(), end="")
+    if file_in:
+        try:
+            stdin.close()
+        except:
+            pass
 
 def mostrar_historial():
     total = len(historial_comandos)
@@ -116,7 +157,7 @@ def ejecutar_background(tokens):
     try:
         p = subprocess.Popen(tokens)
         background_jobs.append(p)
-    except Exception:
+    except:
         print("\033[31mError al ejecutar en segundo plano.\033[0m")
 
 def jobs():
@@ -132,7 +173,7 @@ def fg(args):
         return
     try:
         idx = int(args[1]) - 1
-    except ValueError:
+    except:
         print("\033[31mError: ID de trabajo no válido.\033[0m")
         return
     if idx < 0 or idx >= len(background_jobs):
@@ -197,18 +238,18 @@ def ejecutar_shell():
                 readline.add_history(linea)
         if linea == "exit":
             break
-        if linea == "history":
-            mostrar_historial()
-            continue
-        if linea == "jobs":
-            jobs()
-            continue
         if "|" in linea:
             ejecutar_pipe(linea)
             continue
         if linea.endswith("&"):
             cmd = shlex.split(linea[:-1])
             ejecutar_background(cmd)
+            continue
+        if linea == "history":
+            mostrar_historial()
+            continue
+        if linea == "jobs":
+            jobs()
             continue
         tokens = shlex.split(linea)
         if ">" in tokens or ">>" in tokens:
@@ -227,7 +268,7 @@ def ejecutar_shell():
             continue
         try:
             subprocess.run(tokens)
-        except (FileNotFoundError, subprocess.CalledProcessError):
+        except:
             comando_no_reconocido()
 
 if __name__ == "__main__":
