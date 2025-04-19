@@ -50,5 +50,3 @@ y hasta aquí tienen 3 puntos en el proyecto
 
    Fecha de entrega: Domingo 20 de abril 11:59:59 PM. Mediante un issue o PR en el presente repositorio.
 =======
-# SCR_Shell
->>>>>>> project-a/main
