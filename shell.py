@@ -2,12 +2,11 @@
 import os
 import sys
 import subprocess
-from typing import List, Optional, IO
+from typing import List, Optional
 
 MAX_HISTORY = 50
 HISTORY_FILE = os.path.expanduser("~/.shell_history")
 history: List[str] = []
-
 
 INTERACTIVE = sys.stdin.isatty()
 
@@ -19,7 +18,6 @@ def read_command() -> str:
     try:
         return input().strip()
     except EOFError:
-        print("\nExit")
         sys.exit(0)
     except KeyboardInterrupt:
         return ""
@@ -50,15 +48,24 @@ def handle_redirections(command: str) -> tuple:
 def execute_pipeline(commands: List[str]) -> None:
     processes = []
     prev_proc = None
+    open_files = []
 
-    for i, cmd in enumerate(commands):
-        cmd, input_file, output_file, mode = handle_redirections(cmd)
+    for i, raw_cmd in enumerate(commands):
+        cmd, input_file, output_file, mode = handle_redirections(raw_cmd)
         cmd_parts = cmd.strip().split()
 
-        stdin = open(input_file, "r") if input_file else (prev_proc.stdout if prev_proc else None)
+        stdin = None
+        if input_file:
+            stdin = open(input_file, "r")
+            open_files.append(stdin)
+        elif prev_proc:
+            stdin = prev_proc.stdout
 
-        if i == len(commands) - 1:  # último comando
-            stdout = open(output_file, mode) if output_file else None
+        stdout = None
+        if i == len(commands) - 1:
+            if output_file:
+                stdout = open(output_file, mode)
+                open_files.append(stdout)
         else:
             stdout = subprocess.PIPE
 
@@ -70,6 +77,9 @@ def execute_pipeline(commands: List[str]) -> None:
 
     for proc in processes:
         proc.wait()
+
+    for f in open_files:
+        f.close()
 
 def execute_external(cmd_parts: List[str], input_file: Optional[str], output_file: Optional[str], mode: str) -> None:
     input_fd = open(input_file, "r") if input_file else None
@@ -115,7 +125,7 @@ def process_command(command: str) -> None:
     add_to_history(command)
 
     if '|' in command:
-        execute_pipeline(command.split('|'))
+        execute_pipeline([segment.strip() for segment in command.split('|')])
         return
 
     cmd_str, input_file, output_file, mode = handle_redirections(command)
