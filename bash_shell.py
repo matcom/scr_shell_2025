@@ -117,7 +117,7 @@ def ejecutar_shell():
                     break
         if linea == "!!":
             if not historial_comandos:
-                print("\033[31mError: No hay comandos en el historial.\033[0m")
+                print("\033[31mError: No hay comandos en el historial..\033[0m")
                 continue
             linea = historial_comandos[-1]
         elif linea.startswith("!"):
