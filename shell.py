@@ -3,189 +3,195 @@ import os
 import sys
 import re
 import subprocess
-import signal
-from typing import List, Dict
+from typing import List, Optional, IO
+
 
 MAX_HISTORY = 50
+HISTORY_FILE = os.path.expanduser("~/.shell_history")
 history: List[str] = []
-background_jobs: List[Dict] = []  
 
 
-def print_prompt():
+
+def print_prompt() -> None:
+    """Muestra el prompt del shell."""
     print("$ ", end="", flush=True)
 
-def read_input() -> str:
+def read_command() -> str:
+    """Lee un comando desde la entrada estándar."""
     try:
         return input().strip()
-    except EOFError: 
+    except EOFError:
         print("\nExit")
         sys.exit(0)
-    except KeyboardInterrupt:  
+    except KeyboardInterrupt:
         return ""
 
-def preprocess_input(input_line: str) -> str:
-    if input_line.startswith("!"):
-        if input_line == "!!":
-            return history[-1] if history else ""
-        elif input_line[1:].isdigit():
-            idx = int(input_line[1:]) - 1
-            return history[idx] if 0 <= idx < len(history) else ""
-        else:
-            search = input_line[1:]
-            for cmd in reversed(history):
-                if cmd.startswith(search):
-                    return cmd
-            print(f"Comando no encontrado: {input_line}", file=sys.stderr)
-            return ""
-    return input_line
+def add_to_history(command: str) -> None:
+    """Añade un comando al historial."""
+    if command and (not history or command != history[-1]):
+        if len(history) >= MAX_HISTORY:
+            history.pop(0)
+        history.append(command)
 
-def update_history(cmd: str):
-    if cmd.startswith(" ") or (history and history[-1] == cmd):
-        return
-    if len(history) >= MAX_HISTORY:
-        history.pop(0)
-    history.append(cmd)
-
-def handle_cd(path: str):
+def execute_external(command: List[str], input_fd: Optional[IO] = None, 
+                    output_fd: Optional[IO] = None) -> None:
+    """Ejecuta un comando externo con redirecciones."""
     try:
-        os.chdir(path or os.environ["HOME"])
-    except Exception as e:
-        print(f"cd: {e}", file=sys.stderr)
-
-def print_history():
-    start = max(0, len(history) - MAX_HISTORY)
-    for i, cmd in enumerate(history[start:], start=start+1):
-        print(f"{i} {cmd}")
-
-def print_jobs():
-    for idx, job in enumerate(background_jobs):
-        print(f"[{idx+1}] {job['cmd']} (PID: {job['pid']})")
-
-def handle_fg(job_num: str):
-    if not job_num:
-        print("fg: falta número de job", file=sys.stderr)
-        return
-    try:
-        idx = int(job_num) - 1
-        job = background_jobs[idx]
-        os.waitpid(job["pid"], 0)
-        del background_jobs[idx]
-    except (ValueError, IndexError):
-        print("fg: job inválido", file=sys.stderr)
-
-def parse_command(cmd: str) -> List[str]:
-    return re.split(r'\s+', cmd.strip())
-
-def split_pipe_commands(parts: List[str]) -> List[List[str]]:
-    commands = []
-    current = []
-    for part in parts:
-        if part == "|":
-            commands.append(current)
-            current = []
-        else:
-            current.append(part)
-    commands.append(current)
-    return commands
-
-def parse_redirections(parts: List[str]):
-    stdin = None
-    stdout = None
-    stderr = None
-    i = 0
-    while i < len(parts):
-        if parts[i] == "<":
-            stdin = open(parts[i+1], "r")
-            del parts[i:i+2]
-        elif parts[i] == ">":
-            stdout = open(parts[i+1], "w")
-            del parts[i:i+2]
-        elif parts[i] == ">>":
-            stdout = open(parts[i+1], "a")
-            del parts[i:i+2]
-        elif parts[i] == "2>":
-            stderr = open(parts[i+1], "w")
-            del parts[i:i+2]
-        else:
-            i += 1
-    return stdin, stdout, stderr
-
-def execute_pipes(commands: List[List[str]]):
-    prev_pipe = None
-    processes = []
-    for i, cmd in enumerate(commands):
-        stdin = prev_pipe if prev_pipe else None
-        stdout = subprocess.PIPE if i < len(commands)-1 else None
-        process = subprocess.Popen(
-            cmd,
-            stdin=stdin,
-            stdout=stdout,
-            stderr=None,
-            text=True
+        subprocess.run(
+            command,
+            stdin=input_fd or sys.stdin,
+            stdout=output_fd or sys.stdout,
+            stderr=sys.stderr,
+            check=True
         )
-        processes.append(process)
-        if prev_pipe:
-            prev_pipe.close()
-        prev_pipe = process.stdout
-    for p in processes:
-        p.wait()
+    except FileNotFoundError:
+        print(f"{command[0]}: comando no encontrado", file=sys.stderr)
+    except subprocess.CalledProcessError as e:
+        print(f"Error al ejecutar {command[0]} (código {e.returncode})", file=sys.stderr)
 
-def execute_single_command(parts, stdin, stdout, stderr, original_cmd, in_background):
-    process = subprocess.Popen(
-        parts,
-        stdin=stdin,
-        stdout=stdout,
-        stderr=stderr,
-        text=True
-    )
-    if in_background:
-        background_jobs.append({"pid": process.pid, "cmd": original_cmd})
-    else:
+def handle_redirections(command: str) -> tuple:
+    """Analiza y aplica redirecciones de entrada/salida."""
+    input_file = None
+    output_file = None
+    mode = "w"
+
+
+    if '>' in command:
+        if '>>' in command:
+            parts = command.split('>>')
+            command = parts[0].strip()
+            output_file = parts[1].strip()
+            mode = "a"
+        else:
+            parts = command.split('>')
+            command = parts[0].strip()
+            output_file = parts[1].strip()
+            mode = "w"
+
+    if '<' in command:
+        parts = command.split('<')
+        command = parts[0].strip()
+        input_file = parts[1].strip()
+
+    return command, input_file, output_file, mode
+
+def execute_pipeline(commands: List[str]) -> None:
+    """Ejecuta una serie de comandos conectados por pipes."""
+    prev_output = None
+    processes = []  
+
+    for cmd in commands:
+        cmd_parts = cmd.strip().split()
+        input_file = None
+        output_file = None
+        mode = "w"
+
+ 
+        cmd_processed, input_file, output_file, mode = handle_redirections(cmd)
+
+        if input_file:
+            stdin = open(input_file, "r")
+        else:
+            stdin = prev_output
+
+        if output_file:
+            stdout = open(output_file, mode)
+        else:
+            stdout = subprocess.PIPE if cmd != commands[-1] else None
+
+        process = subprocess.Popen(
+            cmd_processed.split(),
+            stdin=stdin if isinstance(stdin, IO) else prev_output,
+            stdout=stdout,
+            stderr=sys.stderr
+        )
+
+        processes.append(process) 
+
+        if prev_output and not input_file:
+            prev_output.close()
+        prev_output = process.stdout
+
+    if prev_output:
+        prev_output.close()
+
+    for process in processes:
         process.wait()
 
-def process_command(cmd: str):
-    parts = parse_command(cmd)
-    if not parts:
-        return
-    if parts[0] == "cd":
-        handle_cd(parts[1] if len(parts) > 1 else None)
-    elif parts[0] == "exit":
-        sys.exit(0)
-    elif parts[0] == "history":
-        print_history()
-    elif parts[0] == "jobs":
-        print_jobs()
-    elif parts[0] == "fg":
-        handle_fg(parts[1] if len(parts) > 1 else None)
-    else:
+
+def handle_internal(command: List[str]) -> bool:
+    """Maneja comandos internos como cd, history, etc."""
+    if command[0] == "cd":
         try:
-            if "|" in parts:
-                commands = split_pipe_commands(parts)
-                execute_pipes(commands)
-            else:
-                in_background = "&" in parts
-                if in_background:
-                    parts.remove("&")
-                stdin, stdout, stderr = parse_redirections(parts)
-                execute_single_command(parts, stdin, stdout, stderr, cmd, in_background)
+            os.chdir(command[1] if len(command) > 1 else os.environ["HOME"])
         except Exception as e:
-            print(f"Error: {e}", file=sys.stderr)
+            print(f"cd: {e}", file=sys.stderr)
+        return True
 
-def handle_sigint(sig, frame):
-    print("\n$ ", end="", flush=True)
+    if command[0] == "history":
+        for i, cmd in enumerate(history[-MAX_HISTORY:], start=1):
+            print(f"{i} {cmd}")
+        return True
 
-def main():
-    signal.signal(signal.SIGINT, handle_sigint)
-    while True:
-        print_prompt()
-        input_line = read_input()
-        if not input_line:
-            continue
-        input_line = preprocess_input(input_line)
-        if not input_line:
-            continue
-        update_history(input_line)
-        process_command(input_line)
+    return False
+
+def process_command(command: str) -> None:
+    """Procesa y ejecuta un comando."""
+    add_to_history(command)
+
+
+    if '|' in command:
+        commands = command.split('|')
+        execute_pipeline(commands)
+        return
+
+
+    cmd_processed, input_file, output_file, mode = handle_redirections(command)
+    cmd_parts = cmd_processed.split()
+
+    if not cmd_parts:
+        return
+
+    if handle_internal(cmd_parts):
+        return
+
+
+    input_fd = None
+    output_fd = None
+
+    try:
+        if input_file:
+            input_fd = open(input_file, "r")
+        
+        if output_file:
+            output_fd = open(output_file, mode)
+
+        execute_external(cmd_parts, input_fd, output_fd)
+
+    except FileNotFoundError as e:
+        print(f"{e.filename}: No existe el archivo o directorio", file=sys.stderr)
+    finally:
+        if input_fd:
+            input_fd.close()
+        if output_fd:
+            output_fd.close()
+
+
+def main() -> None:
+
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r") as f:
+            history.extend(line.strip() for line in f.readlines()[-MAX_HISTORY:])
+
+    try:
+        while True:
+            print_prompt()
+            command = read_command()
+            process_command(command)
+    finally:
+
+        with open(HISTORY_FILE, "w") as f:
+            f.write("\n".join(history[-MAX_HISTORY:]))
 
 if __name__ == "__main__":
     main()
