@@ -31,8 +31,8 @@ def tokenizar(linea):
         tokens.append(actual)
     return tokens
 
-def parsear_redireccion(comando):
-    tokens = tokenizar(comando)
+def parsear_redireccion(cmd):
+    tokens = tokenizar(cmd)
     args = []
     ent = None
     sal = None
@@ -58,8 +58,8 @@ def parsear_redireccion(comando):
 def cd(ruta):
     try:
         os.chdir(ruta)
-    except FileNotFoundError:
-        print(f"{ruta}: no existe el directorio")
+    except:
+        pass
 
 def manejar_historial(cmd):
     if cmd.startswith(' '):
@@ -75,7 +75,7 @@ def expandir_comando(cmd):
         if len(historia) > 0:
             return historia[-1]
         return ''
-    if cmd.startswith('!'):
+    if cmd.startswith('!') and len(cmd) > 1:
         clave = cmd[1:]
         if clave.isdigit():
             idx = int(clave) - 1
@@ -91,7 +91,7 @@ def expandir_comando(cmd):
 def mostrar_historial():
     num = 1
     for h in historia:
-        print(f"{num} {h}")
+        print(f'{num} {h}')
         num += 1
 
 def mostrar_jobs():
@@ -107,39 +107,32 @@ def ejecutar_basico(cmd, fondo):
     args, ent, sal, anex = parsear_redireccion(cmd)
     if len(args) == 0:
         return
-
     if args[0] == 'cd':
         if len(args) > 1:
             cd(args[1])
         else:
             cd(os.path.expanduser('~'))
         return
-
     if args[0] == 'history':
         mostrar_historial()
         return
-
     if args[0] == 'jobs':
         mostrar_jobs()
         return
-
     if args[0] == 'fg':
         fg()
         return
-
     stdin = None
     if ent:
         try:
             stdin = open(ent, 'r')
-        except FileNotFoundError:
-            print(f"{ent}: no existe el fichero")
+        except:
+            print(f'{ent}: no existe')
             return
-
     stdout = None
     if sal:
         modo = 'a' if anex else 'w'
         stdout = open(sal, modo)
-
     try:
         if fondo:
             p = subprocess.Popen(
@@ -157,36 +150,34 @@ def ejecutar_basico(cmd, fondo):
                 stderr=subprocess.PIPE,
                 text=True
             )
-            salida, _ = p.communicate()
-            if salida:
-                print(salida, end='')
-    except FileNotFoundError:
-        print(f"{args[0]}: comando no encontrado")
+            out, _ = p.communicate()
+            if out:
+                print(out, end='')
+    except:
+        print(f'{args[0]}: comando no encontrado')
 
 def ejecutar_tuberias(cmd, fondo):
     partes = cmd.split('|')
     canal = None
     ultimo = None
-
-    for idx in range(len(partes)):
-        seg = partes[idx].strip()
+    i = 0
+    while i < len(partes):
+        seg = partes[i].strip()
         args, ent, sal, anex = parsear_redireccion(seg)
         if len(args) == 0:
             return
-
         if canal is not None:
             stdin = subprocess.PIPE
         else:
             if ent:
                 try:
                     stdin = open(ent, 'r')
-                except FileNotFoundError:
-                    print(f"{ent}: no existe el fichero")
+                except:
+                    print(f'{ent}: no existe')
                     return
             else:
                 stdin = None
-
-        if idx < len(partes) - 1:
+        if i < len(partes) - 1:
             stdout = subprocess.PIPE
         else:
             if sal:
@@ -197,7 +188,6 @@ def ejecutar_tuberias(cmd, fondo):
                     stdout = subprocess.DEVNULL
                 else:
                     stdout = subprocess.PIPE
-
         try:
             p = subprocess.Popen(
                 args,
@@ -206,51 +196,70 @@ def ejecutar_tuberias(cmd, fondo):
                 stderr=subprocess.PIPE,
                 text=True
             )
-        except FileNotFoundError:
-            print(f"{args[0]}: comando no encontrado")
+        except:
+            print(f'{args[0]}: comando no encontrado')
             return
-
         if canal is not None:
             p.stdin.write(canal)
             p.stdin.close()
-
-        salida, _ = p.communicate()
-        if idx == len(partes) - 1 and salida:
-            print(salida, end='')
-
-        canal = salida
+        out, _ = p.communicate()
+        if i == len(partes) - 1 and out:
+            print(out, end='')
+        canal = out
         ultimo = p
-
+        i += 1
     if fondo and ultimo:
         trabajos.append((ultimo, cmd))
 
-def ejecutar_comando(linea):
-    linea = linea.strip()
+def quotes_balanced(s):
+    single = False
+    double = False
+    for c in s:
+        if c == "'" and not double:
+            single = not single
+        elif c == '"' and not single:
+            double = not double
+    return not single and not double
+
+def leer_comando():
+    try:
+        linea = input('} ')
+    except EOFError:
+        return None
+    cmd = linea
+    if not quotes_balanced(cmd):
+        while True:
+            try:
+                linea2 = input('> ')
+            except EOFError:
+                break
+            cmd += '\n' + linea2
+            if quotes_balanced(cmd):
+                break
+    return cmd
+
+def ejecutar_comando(cmd):
     fondo = False
-    if linea.endswith('&'):
+    if cmd.endswith('&'):
         fondo = True
-        linea = linea[:-1].strip()
-
-    cmd = expandir_comando(linea)
-    if cmd == '':
+        cmd = cmd[:-1].strip()
+    cmd_e = expandir_comando(cmd)
+    if cmd_e == '':
         return
-
-    if not linea.startswith('!'):
-        manejar_historial(linea)
-
-    if '|' in cmd:
-        ejecutar_tuberias(cmd, fondo)
+    if not cmd.startswith('!'):
+        manejar_historial(cmd)
+    if '|' in cmd_e:
+        ejecutar_tuberias(cmd_e, fondo)
     else:
-        ejecutar_basico(cmd, fondo)
+        ejecutar_basico(cmd_e, fondo)
 
 def main():
     while True:
-        try:
-            linea = input('} ')
-        except EOFError:
+        cmd = leer_comando()
+        if cmd is None:
             break
-        if linea:
-            ejecutar_comando(linea)
+        if cmd:
+            ejecutar_comando(cmd)
 
 if __name__ == '__main__':
     main()
