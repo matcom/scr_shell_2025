@@ -1,37 +1,59 @@
 #!/usr/bin/env python3
 import os
-import shlex
 import subprocess
 
 historia = []
 trabajos = []
 
+def tokenizar(linea):
+    tokens = []
+    actual = ''
+    dentro = False
+    comilla = ''
+    for c in linea:
+        if dentro:
+            if c == comilla:
+                dentro = False
+                comilla = ''
+            else:
+                actual += c
+        else:
+            if c == '"' or c == "'":
+                dentro = True
+                comilla = c
+            elif c.isspace():
+                if actual != '':
+                    tokens.append(actual)
+                    actual = ''
+            else:
+                actual += c
+    if actual != '':
+        tokens.append(actual)
+    return tokens
+
 def parsear_redireccion(comando):
-    try:
-        tokens = shlex.split(comando)
-    except ValueError:
-        raise
+    tokens = tokenizar(comando)
     args = []
-    entrada = None
-    salida = None
-    anexar = False
+    ent = None
+    sal = None
+    anex = False
     i = 0
     while i < len(tokens):
         if tokens[i] == '<':
-            entrada = tokens[i+1]
+            ent = tokens[i+1]
             i += 2
         elif tokens[i] == '>>':
-            salida = tokens[i+1]
-            anexar = True
+            sal = tokens[i+1]
+            anex = True
             i += 2
         elif tokens[i] == '>':
-            salida = tokens[i+1]
-            anexar = False
+            sal = tokens[i+1]
+            anex = False
             i += 2
         else:
             args.append(tokens[i])
             i += 1
-    return args, entrada, salida, anexar
+    return args, ent, sal, anex
 
 def cd(ruta):
     try:
@@ -39,71 +61,72 @@ def cd(ruta):
     except FileNotFoundError:
         print(f"{ruta}: no existe el directorio")
 
-def manejar_historial(comando):
-    if comando.startswith(' '):
+def manejar_historial(cmd):
+    if cmd.startswith(' '):
         return
-    if len(historia) > 0 and comando == historia[-1]:
+    if len(historia) > 0 and cmd == historia[-1]:
         return
-    historia.append(comando)
+    historia.append(cmd)
     if len(historia) > 50:
         historia.pop(0)
 
-def expandir_comando(comando):
-    if comando == '!!':
+def expandir_comando(cmd):
+    if cmd == '!!':
         if len(historia) > 0:
             return historia[-1]
         return ''
-    if comando.startswith('!'):
-        clave = comando[1:]
+    if cmd.startswith('!'):
+        clave = cmd[1:]
         if clave.isdigit():
             idx = int(clave) - 1
             if 0 <= idx < len(historia):
                 return historia[idx]
             return ''
-        for cmd in reversed(historia):
-            if cmd.startswith(clave):
-                return cmd
+        for h in reversed(historia):
+            if h.startswith(clave):
+                return h
         return ''
-    return comando
+    return cmd
 
 def mostrar_historial():
     num = 1
-    for cmd in historia:
-        print(f"{num} {cmd}")
+    for h in historia:
+        print(f"{num} {h}")
         num += 1
 
 def mostrar_jobs():
-    for proc, cmd in trabajos:
-        print(cmd)
+    for p, c in trabajos:
+        print(c)
 
 def fg():
     if len(trabajos) > 0:
-        proc, cmd = trabajos.pop(0)
-        proc.wait()
+        p, c = trabajos.pop(0)
+        p.wait()
 
-def ejecutar_basico(comando, fondo):
-    try:
-        args, ent, sal, anex = parsear_redireccion(comando)
-    except ValueError:
-        print("Error de sintaxis: comilla sin cerrar")
-        return
+def ejecutar_basico(cmd, fondo):
+    args, ent, sal, anex = parsear_redireccion(cmd)
     if len(args) == 0:
         return
+
     if args[0] == 'cd':
         if len(args) > 1:
             cd(args[1])
         else:
             cd(os.path.expanduser('~'))
         return
+
     if args[0] == 'history':
         mostrar_historial()
         return
+
     if args[0] == 'jobs':
         mostrar_jobs()
         return
+
     if args[0] == 'fg':
         fg()
         return
+
     stdin = None
     if ent:
         try:
@@ -111,70 +134,58 @@ def ejecutar_basico(comando, fondo):
         except FileNotFoundError:
             print(f"{ent}: no existe el fichero")
             return
+
     stdout = None
     if sal:
         modo = 'a' if anex else 'w'
         stdout = open(sal, modo)
+
     try:
         if fondo:
-            proc = subprocess.Popen(args, stdin=stdin, stdout=stdout or subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            trabajos.append((proc, comando))
+            p = subprocess.Popen(
+                args,
+                stdin=stdin,
+                stdout=stdout or subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            trabajos.append((p, cmd))
         else:
-            proc = subprocess.Popen(args, stdin=stdin, stdout=stdout or subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            salida, _ = proc.communicate()
+            p = subprocess.Popen(
+                args,
+                stdin=stdin,
+                stdout=stdout or subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            salida, _ = p.communicate()
             if salida:
                 print(salida, end='')
     except FileNotFoundError:
         print(f"{args[0]}: comando no encontrado")
 
-def ejecutar_tuberias(comando, fondo):
-    partes = comando.split('|')
-    canal_entrada = None
+def ejecutar_tuberias(cmd, fondo):
+    partes = cmd.split('|')
+    canal = None
     ultimo = None
+
     for idx in range(len(partes)):
         seg = partes[idx].strip()
-        try:
-            args, ent, sal, anex = parsear_redireccion(seg)
-        except ValueError:
-            print("Error de sintaxis: comilla sin cerrar")
-            return
+        args, ent, sal, anex = parsear_redireccion(seg)
         if len(args) == 0:
             return
-        if args[0] == 'cd':
-            if len(args) > 1:
-                cd(args[1])
-            else:
-                cd(os.path.expanduser('~'))
-            canal_entrada = None
-            continue
-        if args[0] == 'history':
-            texto = ''
-            num = 1
-            for cmd in historia:
-                texto += f"{num} {cmd}\n"
-                num += 1
-            canal_entrada = texto
-            continue
-        if args[0] == 'jobs':
-            texto = ''
-            for p, c in trabajos:
-                texto += f"{c}\n"
-            canal_entrada = texto
-            continue
-        if args[0] == 'fg':
-            fg()
-            canal_entrada = None
-            continue
-        if canal_entrada is not None:
+
+        if canal is not None:
             stdin = subprocess.PIPE
-        elif ent:
-            try:
-                stdin = open(ent, 'r')
-            except FileNotFoundError:
-                print(f"{ent}: no existe el fichero")
-                return
         else:
-            stdin = None
+            if ent:
+                try:
+                    stdin = open(ent, 'r')
+                except FileNotFoundError:
+                    print(f"{ent}: no existe el fichero")
+                    return
+            else:
+                stdin = None
+
         if idx < len(partes) - 1:
             stdout = subprocess.PIPE
         else:
@@ -186,78 +197,51 @@ def ejecutar_tuberias(comando, fondo):
                     stdout = subprocess.DEVNULL
                 else:
                     stdout = subprocess.PIPE
+
         try:
-            proc = subprocess.Popen(args, stdin=stdin, stdout=stdout, stderr=subprocess.PIPE, text=True)
+            p = subprocess.Popen(
+                args,
+                stdin=stdin,
+                stdout=stdout,
+                stderr=subprocess.PIPE,
+                text=True
+            )
         except FileNotFoundError:
             print(f"{args[0]}: comando no encontrado")
             return
-        if canal_entrada is not None:
-            proc.stdin.write(canal_entrada)
-            proc.stdin.close()
-        salida, _ = proc.communicate()
+
+        if canal is not None:
+            p.stdin.write(canal)
+            p.stdin.close()
+
+        salida, _ = p.communicate()
         if idx == len(partes) - 1 and salida:
             print(salida, end='')
-        canal_entrada = salida
-        ultimo = proc
+
+        canal = salida
+        ultimo = p
+
     if fondo and ultimo:
-        trabajos.append((ultimo, comando))
+        trabajos.append((ultimo, cmd))
 
-def ejecutar_tuberias_background(comando):
-    partes = comando.split('|')
-    previo = None
-    ultimo = None
-    for idx in range(len(partes)):
-        seg = partes[idx].strip()
-        try:
-            args, ent, sal, anex = parsear_redireccion(seg)
-        except ValueError:
-            print("Error de sintaxis: comilla sin cerrar")
-            return
-        if len(args) == 0:
-            return
-        if previo:
-            stdin = previo
-        elif ent:
-            try:
-                stdin = open(ent, 'r')
-            except FileNotFoundError:
-                print(f"{ent}: no existe el fichero")
-                return
-        else:
-            stdin = None
-        if idx < len(partes) - 1:
-            stdout = subprocess.PIPE
-        else:
-            if sal:
-                modo = 'a' if anex else 'w'
-                stdout = open(sal, modo)
-            else:
-                stdout = subprocess.DEVNULL
-        try:
-            proc = subprocess.Popen(args, stdin=stdin, stdout=stdout, stderr=subprocess.DEVNULL)
-        except FileNotFoundError:
-            print(f"{args[0]}: comando no encontrado")
-            return
-        previo = proc.stdout
-        ultimo = proc
-    if ultimo:
-        trabajos.append((ultimo, comando))
-
-def ejecutar_comando(comando):
+def ejecutar_comando(linea):
+    linea = linea.strip()
     fondo = False
-    if comando.endswith('&'):
+    if linea.endswith('&'):
         fondo = True
-        comando = comando[:len(comando)-1]
-        comando = comando.strip()
-    manejo = expandir_comando(comando)
-    if manejo == '':
+        linea = linea[:-1].strip()
+
+    cmd = expandir_comando(linea)
+    if cmd == '':
         return
-    if not comando.startswith('!'):
-        manejar_historial(comando)
-    if '|' in manejo:
-        ejecutar_tuberias(manejo, fondo)
+
+    if not linea.startswith('!'):
+        manejar_historial(linea)
+
+    if '|' in cmd:
+        ejecutar_tuberias(cmd, fondo)
     else:
-        ejecutar_basico(manejo, fondo)
+        ejecutar_basico(cmd, fondo)
 
 def main():
     while True:
