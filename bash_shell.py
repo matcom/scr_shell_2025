@@ -50,97 +50,60 @@ def redirigir_entrada(tokens):
 
 def ejecutar_pipe(linea):
     bg = False
-    temp = linea.rstrip()
-    if temp.endswith("&"):
+    tmp = linea.rstrip()
+    if tmp.endswith("&"):
         bg = True
-        temp = temp[:-1].rstrip()
-    tokens = shlex.split(temp)
-    file_in = None
-    file_out = None
-    modo = 'w'
-    clean = []
-    i = 0
-    while i < len(tokens):
-        if tokens[i] == '<' and i+1 < len(tokens):
-            file_in = tokens[i+1]
-            i += 2
-        elif tokens[i] == '>' and i+1 < len(tokens):
-            file_out = tokens[i+1]
-            modo = 'w'
-            i += 2
-        elif tokens[i] == '>>' and i+1 < len(tokens):
-            file_out = tokens[i+1]
-            modo = 'a'
-            i += 2
-        else:
-            clean.append(tokens[i])
-            i += 1
-    segments = []
-    segment = []
-    for tok in clean:
-        if tok == '|':
-            segments.append(segment)
-            segment = []
-        else:
-            segment.append(tok)
-    segments.append(segment)
+        tmp = tmp[:-1].rstrip()
+    partes = [p.strip() for p in tmp.split("|")]
     datos = None
-    if segments and segments[0] and segments[0][0] == 'jobs':
+    if partes and partes[0].split()[0] == "jobs":
         buf = StringIO()
         old = sys.stdout
         sys.stdout = buf
         jobs()
         sys.stdout = old
         datos = buf.getvalue().encode()
-        segments = segments[1:]
-        if not segments:
-            if not bg:
-                print(buf.getvalue(), end="")
+        partes = partes[1:]
+        if not partes and not bg:
+            print(buf.getvalue(), end="")
             return
     procesos = []
-    prev = None
-    for idx, cmd in enumerate(segments):
+    for i, parte in enumerate(partes):
+        tokens = shlex.split(parte)
         stdin = None
         stdout = None
-        if idx == 0:
+        if i == 0:
             if datos is not None:
                 stdin = subprocess.PIPE
-            elif file_in:
-                stdin = open(file_in, 'r')
-        if idx == len(segments) - 1:
-            if file_out:
-                stdout = open(file_out, modo)
             else:
-                stdout = subprocess.PIPE
+                stdin = None
+        else:
+            stdin = procesos[-1].stdout
+        if i == len(partes) - 1:
+            stdout = subprocess.PIPE
         else:
             stdout = subprocess.PIPE
         try:
-            proc = subprocess.Popen(cmd, stdin=stdin or (prev.stdout if prev else None), stdout=stdout)
+            proc = subprocess.Popen(tokens, stdin=stdin, stdout=stdout)
         except:
             print("\033[31mError al ejecutar pipe.\033[0m")
             return
-        if prev and prev.stdout:
-            prev.stdout.close()
-        if datos is not None and idx == 0:
+        if i > 0:
+            procesos[-1].stdout.close()
+        if datos is not None and i == 0:
             proc.stdin.write(datos)
             proc.stdin.close()
         procesos.append(proc)
-        prev = proc
     last = procesos[-1]
     if bg:
         background_jobs.append(last)
     else:
-        if file_out:
-            last.wait()
-        else:
-            out, _ = last.communicate()
-            if out:
-                print(out.decode(), end="")
-    if file_in:
-        try:
-            stdin.close()
-        except:
-            pass
+        saved = last.stdin
+        last.stdin = None
+        out, _ = last.communicate()
+        last.stdin = saved
+        if out:
+            print(out.decode(), end="")
 
 def mostrar_historial():
     total = len(historial_comandos)
@@ -203,7 +166,7 @@ def ejecutar_shell():
                 break
             linea += "\n" + cont
         if linea == "!!":
-            if len(historial_comandos) == 0:
+            if not historial_comandos:
                 print("\033[31mError: No hay comandos en el historial.\033[0m")
                 continue
             linea = historial_comandos[-1]
