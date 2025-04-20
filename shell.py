@@ -78,12 +78,14 @@ def bring_fg():
 
 
 def parse_command(command):
-
+    command = command.strip()
+    if not command:
+        return []
     try:
         return shlex.split(command)
-    except ValueError:
-        return command.strip().split()
-
+    except ValueError as e:
+        print(f"Error parsing command: {e}")
+        return None
 
 def execute_pipeline(commands, background=False):
     processes = []
@@ -199,18 +201,45 @@ def process_command(command_line):
         except FileNotFoundError:
             print(f"{tokens[0]}: command not found")
 
+def is_balanced(s):
+    single_quote = False
+    double_quote = False
+    escape = False
+    for char in s:
+        if escape:
+            escape = False
+            continue
+        if char == '\\':
+            escape = True
+        elif char == "'" and not double_quote:
+            single_quote = not single_quote
+        elif char == '"' and not single_quote:
+            double_quote = not double_quote
+    return not (single_quote or double_quote)
+
 def main():
     while True:
         try:
+            command_lines = []
             print_prompt()
-            command = input()
-            if command.strip() in ["exit", "quit"]:
+            while True:
+                line = input()
+                command_lines.append(line)
+                full_command = '\n'.join(command_lines)
+                if is_balanced(full_command):
+                    break
+                sys.stdout.write('> ')
+                sys.stdout.flush()
+            command = '\n'.join(command_lines)
+            if command.strip().lower() in ("exit", "quit"):
                 break
             process_command(command)
         except EOFError:
+            print()
             break
         except KeyboardInterrupt:
-            print()  
+            print()
+            command_lines = []
 
 if __name__ == "__main__":
     main()
