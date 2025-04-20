@@ -1,5 +1,5 @@
+#!/usr/bin/env python3
 import os
-import shlex
 import subprocess
 import sys
 
@@ -9,8 +9,7 @@ MAX_HISTORIAL = 50
 
 def iniciar_shell():
     if not sys.stdin.isatty():
-        data = sys.stdin.read()
-        for linea in data.splitlines():
+        for linea in sys.stdin.read().splitlines():
             if linea.strip():
                 procesar_entrada(linea)
         return
@@ -27,6 +26,8 @@ def iniciar_shell():
             continue
 
 def procesar_entrada(entrada):
+    if entrada == "exit":
+        sys.exit(0)
     if entrada == "!!":
         ejecutar_ultimo_comando()
         return
@@ -34,12 +35,17 @@ def procesar_entrada(entrada):
         ejecutar_por_numero(int(entrada[1:]))
         return
     if entrada.startswith("!"):
-        print("Error: Comando no válido. Usa !número")
+        prefijo = entrada[1:]
+        for cmd in reversed(historial):
+            if cmd.startswith(prefijo):
+                ejecutar_comando(cmd)
+                return
+        print("Error: Comando no encontrado en historial.")
         return
-    if entrada.startswith(" "):
-        return
-    agregar_a_historial(entrada)
-    ejecutar_comando(entrada)
+    ejecucion = entrada.lstrip() if entrada.startswith(" ") else entrada
+    if not entrada.startswith(" "):
+        agregar_a_historial(entrada)
+    ejecutar_comando(ejecucion)
 
 def agregar_a_historial(comando):
     if not historial or historial[-1] != comando:
@@ -57,20 +63,18 @@ def ejecutar_por_numero(n):
     if not historial:
         print("Error: No hay comandos en el historial.")
         return
-    if n < 1 or n > len(historial):
+    if not (1 <= n <= len(historial)):
         print("Error: Número fuera del rango del historial.")
         return
     ejecutar_comando(historial[n-1])
 
 def ejecutar_comando(entrada):
-    if entrada == "exit":
-        sys.exit(0)
     if entrada.startswith("cd "):
         cambiar_directorio(entrada)
+    elif entrada.endswith("&"):
+        ejecutar_en_background(entrada)
     elif "|" in entrada:
         manejar_tuberias(entrada)
-    elif "&" in entrada:
-        ejecutar_en_background(entrada)
     elif entrada == "jobs":
         mostrar_trabajos()
     elif entrada == "fg":
@@ -81,7 +85,7 @@ def ejecutar_comando(entrada):
         manejar_redireccion(entrada)
 
 def cambiar_directorio(entrada):
-    tokens = normalize(split_con_comillas(entrada))
+    tokens = split_con_comillas(entrada)
     if len(tokens) > 1:
         try:
             os.chdir(tokens[1])
@@ -90,33 +94,31 @@ def cambiar_directorio(entrada):
 
 def manejar_redireccion(entrada):
     if entrada.startswith("echo "):
-        inicio = entrada.find('"')
-        fin = entrada.rfind('"')
-        if inicio != -1 and fin != -1 and inicio < fin:
-            contenido = entrada[inicio+1:fin]
-            if '\n' in contenido:
-                antes, despues = contenido.split('\n', 1)
-                print(antes)
-                print(despues if despues else "")
+        i = entrada.find('"')
+        f = entrada.rfind('"')
+        if 0 <= i < f:
+            contenido = entrada[i+1:f]
+            if "\\n" in contenido:
+                a, b = contenido.split("\\n", 1)
+                print(a); print(b)
                 return
-            if '\\n' in contenido:
-                antes, despues = contenido.split('\\n', 1)
-                print(antes)
-                print(despues if despues else "")
+            if "\n" in contenido:
+                a, b = contenido.split("\n", 1)
+                print(a); print(b)
                 return
     if ">>" in entrada:
         cmd, archivo = entrada.split(">>", 1)
-        args = normalize(split_con_comillas(cmd))
+        args = normalize(split_con_comillas(cmd.strip()))
         with open(archivo.strip(), "a") as f:
             subprocess.run(args, stdout=f)
     elif ">" in entrada:
         cmd, archivo = entrada.split(">", 1)
-        args = normalize(split_con_comillas(cmd))
+        args = normalize(split_con_comillas(cmd.strip()))
         with open(archivo.strip(), "w") as f:
             subprocess.run(args, stdout=f)
     elif "<" in entrada:
         cmd, archivo = entrada.split("<", 1)
-        args = normalize(split_con_comillas(cmd))
+        args = normalize(split_con_comillas(cmd.strip()))
         with open(archivo.strip(), "r") as f:
             subprocess.run(args, stdin=f)
     else:
@@ -127,11 +129,10 @@ def manejar_redireccion(entrada):
             print("Comando desconocido")
 
 def manejar_tuberias(entrada):
-    partes = [p.strip() for p in entrada.split("|")]
     procesos = []
     prev = None
-    for p in partes:
-        args = normalize(split_con_comillas(p))
+    for parte in entrada.split("|"):
+        args = normalize(split_con_comillas(parte.strip()))
         if prev is None:
             proc = subprocess.Popen(args, stdout=subprocess.PIPE)
         else:
@@ -139,16 +140,29 @@ def manejar_tuberias(entrada):
         procesos.append(proc)
         prev = proc
     salida, _ = procesos[-1].communicate()
-    print(salida.decode(), end="")
+    sys.stdout.write(salida.decode() if isinstance(salida, bytes) else str(salida))
 
 def ejecutar_en_background(entrada):
-    limpio = entrada.replace("&", "").strip()
-    args = normalize(split_con_comillas(limpio))
-    try:
-        p = subprocess.Popen(args)
-        trabajos.append(p)
-    except:
-        print("Comando desconocido")
+    comando = entrada[:-1].strip()
+    if "|" in comando:
+        prev = None
+        primero = None
+        for parte in comando.split("|"):
+            args = normalize(split_con_comillas(parte.strip()))
+            if prev is None:
+                primero = subprocess.Popen(args, stdout=subprocess.PIPE)
+                prev = primero
+            else:
+                prev = subprocess.Popen(args, stdin=prev.stdout, stdout=subprocess.PIPE)
+        if primero:
+            trabajos.append(primero)
+    else:
+        args = normalize(split_con_comillas(comando))
+        try:
+            p = subprocess.Popen(args)
+            trabajos.append(p)
+        except:
+            print("Comando desconocido")
 
 def mostrar_trabajos():
     i = 1
@@ -168,21 +182,16 @@ def mostrar_historial():
         i += 1
 
 def split_con_comillas(comando):
-    tokens = []
-    actual = ""
-    dobles = False
-    simples = False
+    tokens, actual = [], ""
+    dobles = simples = False
     for c in comando:
         if c == '"' and not simples:
-            dobles = not dobles
-            actual += c
+            dobles = not dobles; actual += c
         elif c == "'" and not dobles:
-            simples = not simples
-            actual += c
-        elif c == " " and not dobles and not simples:
+            simples = not simples; actual += c
+        elif c.isspace() and not dobles and not simples:
             if actual:
-                tokens.append(actual)
-                actual = ""
+                tokens.append(actual); actual = ""
         else:
             actual += c
     if actual:
@@ -192,7 +201,7 @@ def split_con_comillas(comando):
 def normalize(tokens):
     resultado = []
     for t in tokens:
-        if len(t) >= 2 and ((t[0] == t[-1] == '"') or (t[0] == t[-1] == "'")):
+        if len(t) >= 2 and ((t[0] == '"' == t[-1]) or (t[0] == "'" == t[-1])):
             resultado.append(t[1:-1])
         else:
             resultado.append(t)
