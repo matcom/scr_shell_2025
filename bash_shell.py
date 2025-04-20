@@ -153,11 +153,9 @@ def manejar_tuberias(entrada):
             salida = buf
         else:
             if salida is not None:
-                proc = subprocess.run(args, input=salida, stdout=subprocess.PIPE,
-                                      stderr=subprocess.PIPE, text=True)
+                proc = subprocess.run(args, input=salida, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             else:
-                proc = subprocess.run(args, stdout=subprocess.PIPE,
-                                      stderr=subprocess.PIPE, text=True)
+                proc = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             salida = proc.stdout
     if salida:
         sys.stdout.write(salida)
