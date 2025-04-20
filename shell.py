@@ -130,10 +130,12 @@ def execute_command(tokens):
 
         proceso = subprocess.run(
             cmd,
-            stdin=stdin_file,
+            stdin=stdin_file if stdin_file else None,
             stdout=stdout_file if output_file else None,
             stderr=subprocess.PIPE,
             text=True
+        
+
         )
         
         if proceso.returncode != 0 and proceso.stderr:
