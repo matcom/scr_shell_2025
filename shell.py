@@ -1,108 +1,63 @@
 import os
-import shlex
 import subprocess
-import io
+import shlex
 
-HISTORY_FILE = "command_history.txt"
-
-def ejecutar_comando(comando, background=False, stdin=None, stdout=None):
+def ejecutar_comando(comando):
+    """
+    Ejecuta un comando en el sistema.
+    """
     try:
-        proceso = subprocess.Popen(comando, stdin=stdin, stdout=stdout)
-        if not background:
-            proceso.communicate()
-    except FileNotFoundError:
-        print(f"Comando no encontrado: {comando[0]}")
-
-def guardar_en_historial(comando):
-    with open(HISTORY_FILE, "a") as historial:
-        historial.write(comando + "\n")
-
-def cargar_historial():
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, "r") as historial:
-            return historial.readlines()
-    return []
-
-def mostrar_historial():
-    historial = cargar_historial()
-    for idx, comando in enumerate(historial, 1):
-        print(f"{idx}: {comando.strip()}")
-
-def ejecutar_desde_historial(numero):
-    historial = cargar_historial()
-    try:
-        comando = historial[int(numero) - 1].strip()
-        print(f"Ejecutando: {comando}")
-        procesar_entrada(comando)
-    except (IndexError, ValueError):
-        print("Número de historial inválido.")
+        subprocess.run(comando, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error ejecutando el comando: {e}")
+    except FileNotFoundError as e:
+        print(f"Comando no encontrado: {e}")
 
 def procesar_entrada(entrada):
-    if not entrada.strip():
+    """
+    Procesa la entrada y ejecuta los comandos, manejando pipes y redirecciones.
+    """
+
+    if '|' in entrada:
+        comandos = [shlex.split(cmd) for cmd in entrada.split("|")]
+        try:
+  
+            proc = subprocess.Popen(comandos[0], stdout=subprocess.PIPE)
+            for cmd in comandos[1:]:
+                proc = subprocess.Popen(cmd, stdin=proc.stdout, stdout=subprocess.PIPE)
+            proc.communicate()
+        except ValueError as e:
+            print(f"Error en la entrada con pipes: {e}")
         return
+    elif '>' in entrada or '>>' in entrada:
 
-    guardar_en_historial(entrada)
+        comando, archivo = entrada.split('>', 1) if '>' in entrada else entrada.split('>>', 1)
+        comando = comando.strip()
+        archivo = archivo.strip()
+        append = True if '>>' in entrada else False
+        with open(archivo, 'a' if append else 'w') as f:
+            subprocess.run(shlex.split(comando), stdout=f)
+        return
+    else:
+   
+        if entrada.startswith("echo"):
 
-    comandos = [shlex.split(cmd) for cmd in entrada.split("|")]
-    num_comandos = len(comandos)
-
-    procesos = []
-    stdin_actual = None
-
-    for i, cmd in enumerate(comandos):
-        if ">" in cmd:
-            idx = cmd.index(">")
-            archivo_salida = cmd[idx + 1]
-            stdout_actual = open(archivo_salida, "w")
-            cmd = cmd[:idx]
-        elif "<" in cmd:
-            idx = cmd.index("<")
-            archivo_entrada = cmd[idx + 1]
-            stdin_actual = open(archivo_entrada, "r")
-            cmd = cmd[:idx]
-            stdout_actual = subprocess.PIPE if i < num_comandos - 1 else None
+            print(entrada[5:].strip())
+            return
         else:
-            stdout_actual = subprocess.PIPE if i < num_comandos - 1 else None
-
-        background = False
-        if cmd and cmd[-1] == "&":
-            background = True
-            cmd = cmd[:-1]
-
-        if cmd:
-            if cmd[0] == "cd":
-                if len(cmd) > 1:
-                    try:
-                        os.chdir(cmd[1])
-                    except FileNotFoundError:
-                        print(f"Directorio no encontrado: {cmd[1]}")
-                else:
-                    print("Uso: cd <directorio>")
-            elif cmd[0] == "history":
-                mostrar_historial()
-            elif cmd[0].startswith("!"):
-                ejecutar_desde_historial(cmd[0][1:])
-            else:
-                proceso = subprocess.Popen(cmd, stdin=stdin_actual, stdout=stdout_actual)
-                procesos.append(proceso)
-                if stdin_actual:
-                    stdin_actual.close()
-                stdin_actual = proceso.stdout if i < num_comandos - 1 else None
-
-    for p in procesos:
-        p.wait()
+   
+            comando = shlex.split(entrada)
+            ejecutar_comando(comando)
 
 def shell():
+    """
+    La función principal del shell.
+    """
     while True:
-        try:
-            entrada = input("Shell> ")
-            if entrada.strip() == "exit":
-                break
-            procesar_entrada(entrada)
-        except KeyboardInterrupt:
-            print("\nUsa 'exit' para salir.")
-        except EOFError:
+        entrada = input("Shell> ")
+        if entrada.lower() == 'exit':
             break
+        procesar_entrada(entrada)
 
 if __name__ == "__main__":
     shell()
