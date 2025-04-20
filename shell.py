@@ -225,21 +225,48 @@ def process_command(command_line):
         except FileNotFoundError:
             print(f"{tokens[0]}: command not found")
 
+def is_balanced(command):
+    quote = None
+    escape = False
+    for char in command:
+        if escape:
+            escape = False
+            continue
+        if char == '\\':
+            escape = True
+        elif char in ('"', "'"):
+            if quote == char:
+                quote = None
+            elif not quote:
+                quote = char
+    return quote is None
+
 def main():
     while True:
         try:
+            cmd_lines = []
             print_prompt()
-            command = sys.stdin.readline()
-            if not command:
-                break
-            command = command.strip()
-            if command in ["exit", "quit"]:
+            while True:
+                line = sys.stdin.readline()
+                if not line:
+                    raise EOFError
+                cmd_lines.append(line.strip('\n'))
+                full_cmd = ' '.join(cmd_lines)
+                if is_balanced(full_cmd):
+                    break
+                sys.stdout.write('> ')
+                sys.stdout.flush()
+                
+            command = ' '.join(cmd_lines)
+            if command.strip().lower() in ('exit', 'quit'):
                 break
             process_command(command)
-        except KeyboardInterrupt:
-            if sys.stdin.isatty():
-                print()  
+            
+        except EOFError:
             break
+        except KeyboardInterrupt:
+            print("\n")
+            cmd_lines = []
 
 if __name__ == "__main__":
     main()
