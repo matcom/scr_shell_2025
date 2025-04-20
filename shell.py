@@ -247,6 +247,7 @@ def process_command(command_line):
 def normalize_command(command):
     command = re.sub(r'(\S)(>>?|<)', r'\1 \2', command)
     command = re.sub(r'(>>?|<)(\S)', r'\1 \2', command)
+    command = re.sub(r'\s+', ' ', command.strip())  
     return command
 
 def is_balanced(command):
