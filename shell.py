@@ -30,6 +30,35 @@ def add_to_history(command: str) -> None:
             history.pop(0)
         history.append(command)
 
+def split_commands(command: str) -> List[str]:
+    commands = []
+    current = []
+    in_quote = None
+    escape = False
+    
+    for c in command:
+        if escape:
+            current.append(c)
+            escape = False
+        elif c == '\\':
+            escape = True
+            current.append(c)
+        elif in_quote:
+            if c == in_quote:
+                in_quote = None
+            current.append(c)
+        elif c in ('"', "'"):
+            in_quote = c
+            current.append(c)
+        elif c == ';' and not in_quote:
+            commands.append(''.join(current).strip())
+            current = []
+        else:
+            current.append(c)
+    if current:
+        commands.append(''.join(current).strip())
+    return commands
+
 def split_pipeline(command: str) -> List[str]:
     parts = []
     current = []
@@ -62,7 +91,7 @@ def split_pipeline(command: str) -> List[str]:
 
 def handle_redirections(command: str) -> Tuple[Optional[List[str]], Optional[str], Optional[str], str]:
     try:
-        tokens = shlex.split(command)
+        tokens = shlex.split(command, posix=False)
     except ValueError as e:
         print(f"Syntax error: {e}", file=sys.stderr)
         return (None, None, None, 'w')
@@ -236,17 +265,25 @@ def process_command(command: str) -> int:
 
     add_to_history(command)
 
-    pipeline_commands = split_pipeline(command)
-    if len(pipeline_commands) > 1:
-        return execute_pipeline(pipeline_commands)
-    else:
-        cmd_str = pipeline_commands[0]
-        cmd_parts, input_file, output_file, mode = handle_redirections(cmd_str)
-        if not cmd_parts:
-            return 1
-        if handle_internal(cmd_parts):
-            return 0
-        return execute_external(cmd_parts, input_file, output_file, mode)
+    return_code = 0
+    commands = split_commands(command)
+    for cmd in commands:
+        if not cmd:
+            continue
+        pipeline_commands = split_pipeline(cmd)
+        if len(pipeline_commands) > 1:
+            rc = execute_pipeline(pipeline_commands)
+        else:
+            cmd_str = pipeline_commands[0]
+            cmd_parts, input_file, output_file, mode = handle_redirections(cmd_str)
+            if not cmd_parts:
+                rc = 1
+            elif handle_internal(cmd_parts):
+                rc = 0
+            else:
+                rc = execute_external(cmd_parts, input_file, output_file, mode)
+        return_code = rc if rc != 0 else return_code
+    return return_code
 
 def main() -> None:
     if os.path.exists(HISTORY_FILE):
