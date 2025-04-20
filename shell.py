@@ -118,7 +118,6 @@ def execute_pipeline(segments, background=False):
         if not tokens:
             continue
 
-        # Manejar comandos built-in en pipelines
         if tokens[0] == 'jobs':
             output = io.StringIO()
             sys.stdout = output
