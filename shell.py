@@ -75,17 +75,14 @@ def bring_fg():
             return
     print("No background jobs.")
 
-def parse_command(command):
-    command = command.strip()
-    if not command:
-        return []
 
-   
+
+def parse_command(command):
     try:
         return shlex.split(command)
-    except ValueError as ve:
-        print(f"Error parsing command: {ve}")
-        return []
+    except ValueError as e:
+        print(f"Error parsing command: {e}")
+        return []  
 
 
 def execute_pipeline(commands, background=False):
