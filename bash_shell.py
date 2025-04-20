@@ -93,19 +93,24 @@ def cambiar_directorio(entrada):
             print("Directorio no encontrado")
 
 def manejar_redireccion(entrada):
+    # Si el comando es echo, se procesa manualmente
     if entrada.startswith("echo "):
-        partes = shlex.split(entrada)
-        if len(partes) >= 2:
-            contenido = partes[1]
+        # Buscar la primera y última comilla dobles
+        primero = entrada.find('"')
+        ultimo = entrada.rfind('"')
+        if primero != -1 and ultimo != -1 and primero != ultimo:
+            contenido = entrada[primero+1:ultimo]
+            # Verificar si existe la secuencia literal "\n"
             if "\\n" in contenido:
-                texto = contenido.replace('"', '')
-                secciones = texto.split("\\n", 1)
-                print(secciones[0])
-                if len(secciones) > 1:
-                    print(secciones[1])
+                partes = contenido.split("\\n", 1)
+                print(partes[0])
+                if partes[1]:
+                    print(partes[1])
                 else:
                     print()
                 return
+        # Si no se cumple la condición anterior, se procesa de forma normal
+    # Procesamiento de redirecciones con >>, > o <
     if ">>" in entrada:
         partes = entrada.split(">>")
         comando = shlex.split(partes[0])
@@ -128,7 +133,7 @@ def manejar_redireccion(entrada):
         try:
             comando = shlex.split(entrada)
             subprocess.run(comando)
-        except:
+        except Exception as e:
             print("Comando desconocido")
 
 def manejar_tuberias(entrada):
@@ -136,8 +141,10 @@ def manejar_tuberias(entrada):
     lista_de_comandos = []
     i = 0
     while i < len(partes):
-        comando = shlex.split(partes[i].strip())
-        lista_de_comandos.append(comando)
+        cmd = partes[i].strip()
+        if cmd:
+            comando = shlex.split(cmd)
+            lista_de_comandos.append(comando)
         i = i + 1
 
     procesos = []
