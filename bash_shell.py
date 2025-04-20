@@ -39,31 +39,24 @@ def agregar_a_historial(comando):
     if len(historial) == 0 or historial[-1] != comando:
         historial.append(comando)
         if len(historial) > MAX_HISTORIAL:
-            nueva_lista = []
-            i = 1
-            while i < len(historial):
-                nueva_lista.append(historial[i])
-                i = i + 1
+            nueva = historial[1:]
             historial.clear()
-            for cmd in nueva_lista:
-                historial.append(cmd)
+            historial.extend(nueva)
 
 def ejecutar_ultimo_comando():
-    if len(historial) == 0:
+    if not historial:
         print("Error: No hay comandos anteriores.")
         return
-    ultimo = historial[-1]
-    ejecutar_comando(ultimo)
+    ejecutar_comando(historial[-1])
 
-def ejecutar_por_numero(numero):
-    if len(historial) == 0:
+def ejecutar_por_numero(n):
+    if not historial:
         print("Error: No hay comandos en el historial.")
         return
-    if numero < 1 or numero > len(historial):
+    if n < 1 or n > len(historial):
         print("Error: Número fuera del rango del historial.")
         return
-    comando = historial[numero - 1]
-    ejecutar_comando(comando)
+    ejecutar_comando(historial[n-1])
 
 def ejecutar_comando(entrada):
     if entrada == "exit":
@@ -86,110 +79,89 @@ def ejecutar_comando(entrada):
 def cambiar_directorio(entrada):
     partes = shlex.split(entrada)
     if len(partes) > 1:
-        destino = partes[1]
         try:
-            os.chdir(destino)
+            os.chdir(partes[1])
         except:
             print("Directorio no encontrado")
 
 def manejar_redireccion(entrada):
-    # Si el comando es echo, se procesa manualmente
     if entrada.startswith("echo "):
-        # Buscar la primera y última comilla dobles
-        primero = entrada.find('"')
-        ultimo = entrada.rfind('"')
-        if primero != -1 and ultimo != -1 and primero != ultimo:
-            contenido = entrada[primero+1:ultimo]
-            # Verificar si existe la secuencia literal "\n"
-            if "\\n" in contenido:
-                partes = contenido.split("\\n", 1)
-                print(partes[0])
-                if partes[1]:
-                    print(partes[1])
-                else:
-                    print()
+        inicio = entrada.find('"')
+        fin = entrada.find('"', inicio+1)
+        if inicio != -1 and fin != -1:
+            contenido = entrada[inicio+1:fin]
+            if '\n' in contenido:
+                antes, despues = contenido.split('\n', 1)
+                print(antes)
+                print(despues if despues else "")
                 return
-        # Si no se cumple la condición anterior, se procesa de forma normal
-    # Procesamiento de redirecciones con >>, > o <
+            if '\\n' in contenido:
+                antes, despues = contenido.split('\\n', 1)
+                print(antes)
+                print(despues if despues else "")
+                return
     if ">>" in entrada:
-        partes = entrada.split(">>")
-        comando = shlex.split(partes[0])
-        archivo = partes[1].strip()
-        with open(archivo, "a") as archivo_salida:
-            subprocess.run(comando, stdout=archivo_salida)
+        cmd, archivo = entrada.split(">>", 1)
+        args = shlex.split(cmd)
+        with open(archivo.strip(), "a") as f:
+            subprocess.run(args, stdout=f)
     elif ">" in entrada:
-        partes = entrada.split(">")
-        comando = shlex.split(partes[0])
-        archivo = partes[1].strip()
-        with open(archivo, "w") as archivo_salida:
-            subprocess.run(comando, stdout=archivo_salida)
+        cmd, archivo = entrada.split(">", 1)
+        args = shlex.split(cmd)
+        with open(archivo.strip(), "w") as f:
+            subprocess.run(args, stdout=f)
     elif "<" in entrada:
-        partes = entrada.split("<")
-        comando = shlex.split(partes[0])
-        archivo = partes[1].strip()
-        with open(archivo, "r") as archivo_entrada:
-            subprocess.run(comando, stdin=archivo_entrada)
+        cmd, archivo = entrada.split("<", 1)
+        args = shlex.split(cmd)
+        with open(archivo.strip(), "r") as f:
+            subprocess.run(args, stdin=f)
     else:
         try:
-            comando = shlex.split(entrada)
-            subprocess.run(comando)
-        except Exception as e:
+            args = shlex.split(entrada)
+            subprocess.run(args)
+        except:
             print("Comando desconocido")
 
 def manejar_tuberias(entrada):
-    partes = entrada.split("|")
-    lista_de_comandos = []
-    i = 0
-    while i < len(partes):
-        cmd = partes[i].strip()
-        if cmd:
-            comando = shlex.split(cmd)
-            lista_de_comandos.append(comando)
-        i = i + 1
-
+    partes = [p.strip() for p in entrada.split("|")]
     procesos = []
-    anterior = None
-    j = 0
-    while j < len(lista_de_comandos):
-        actual = lista_de_comandos[j]
-        if anterior is None:
-            proceso = subprocess.Popen(actual, stdout=subprocess.PIPE)
+    prev = None
+    for p in partes:
+        args = shlex.split(p)
+        if prev is None:
+            proc = subprocess.Popen(args, stdout=subprocess.PIPE)
         else:
-            proceso = subprocess.Popen(actual, stdin=anterior.stdout, stdout=subprocess.PIPE)
-        procesos.append(proceso)
-        anterior = proceso
-        j = j + 1
-
+            proc = subprocess.Popen(args, stdin=prev.stdout, stdout=subprocess.PIPE)
+        procesos.append(proc)
+        prev = proc
     salida, _ = procesos[-1].communicate()
     print(salida.decode(), end="")
 
 def ejecutar_en_background(entrada):
     limpio = entrada.replace("&", "").strip()
     try:
-        comando = shlex.split(limpio)
-        proceso = subprocess.Popen(comando)
-        trabajos.append(proceso)
+        args = shlex.split(limpio)
+        p = subprocess.Popen(args)
+        trabajos.append(p)
     except:
         print("Comando desconocido")
 
 def mostrar_trabajos():
-    i = 0
-    while i < len(trabajos):
-        proc = trabajos[i]
-        pid = proc.pid
-        print("[{}] PID {}".format(i + 1, pid))
-        i = i + 1
+    i = 1
+    for p in trabajos:
+        print(f"[{i}] PID {p.pid}")
+        i += 1
 
 def traer_a_foreground():
-    if len(trabajos) > 0:
-        proc = trabajos[0]
-        trabajos.pop(0)
-        proc.wait()
+    if trabajos:
+        p = trabajos.pop(0)
+        p.wait()
 
 def mostrar_historial():
-    i = 0
-    while i < len(historial):
-        print(str(i + 1) + " " + historial[i])
-        i = i + 1
+    i = 1
+    for cmd in historial:
+        print(f"{i} {cmd}")
+        i += 1
 
-iniciar_shell()
+if __name__ == "__main__":
+    iniciar_shell()
