@@ -8,6 +8,11 @@ trabajos = []
 MAX_HISTORIAL = 50
 
 def iniciar_shell():
+    if not sys.stdin.isatty():
+        entrada = sys.stdin.read()
+        if entrada:
+            procesar_entrada(entrada.rstrip('\n'))
+        return
     while True:
         try:
             entrada = input("} ")
@@ -36,12 +41,10 @@ def procesar_entrada(entrada):
     ejecutar_comando(entrada)
 
 def agregar_a_historial(comando):
-    if len(historial) == 0 or historial[-1] != comando:
+    if not historial or historial[-1] != comando:
         historial.append(comando)
         if len(historial) > MAX_HISTORIAL:
-            nueva = historial[1:]
-            historial.clear()
-            historial.extend(nueva)
+            del historial[0]
 
 def ejecutar_ultimo_comando():
     if not historial:
@@ -63,7 +66,7 @@ def ejecutar_comando(entrada):
         sys.exit(0)
     if entrada.startswith("cd "):
         cambiar_directorio(entrada)
-    elif " | " in entrada:
+    elif "|" in entrada:
         manejar_tuberias(entrada)
     elif "&" in entrada:
         ejecutar_en_background(entrada)
@@ -77,7 +80,7 @@ def ejecutar_comando(entrada):
         manejar_redireccion(entrada)
 
 def cambiar_directorio(entrada):
-    partes = shlex.split(entrada)
+    partes = split_con_comillas(entrada)
     if len(partes) > 1:
         try:
             os.chdir(partes[1])
@@ -87,8 +90,8 @@ def cambiar_directorio(entrada):
 def manejar_redireccion(entrada):
     if entrada.startswith("echo "):
         inicio = entrada.find('"')
-        fin = entrada.find('"', inicio+1)
-        if inicio != -1 and fin != -1:
+        fin = entrada.rfind('"')
+        if inicio != -1 and fin != -1 and inicio < fin:
             contenido = entrada[inicio+1:fin]
             if '\n' in contenido:
                 antes, despues = contenido.split('\n', 1)
@@ -102,22 +105,22 @@ def manejar_redireccion(entrada):
                 return
     if ">>" in entrada:
         cmd, archivo = entrada.split(">>", 1)
-        args = shlex.split(cmd)
+        args = split_con_comillas(cmd)
         with open(archivo.strip(), "a") as f:
             subprocess.run(args, stdout=f)
     elif ">" in entrada:
         cmd, archivo = entrada.split(">", 1)
-        args = shlex.split(cmd)
+        args = split_con_comillas(cmd)
         with open(archivo.strip(), "w") as f:
             subprocess.run(args, stdout=f)
     elif "<" in entrada:
         cmd, archivo = entrada.split("<", 1)
-        args = shlex.split(cmd)
+        args = split_con_comillas(cmd)
         with open(archivo.strip(), "r") as f:
             subprocess.run(args, stdin=f)
     else:
+        args = split_con_comillas(entrada)
         try:
-            args = shlex.split(entrada)
             subprocess.run(args)
         except:
             print("Comando desconocido")
@@ -127,7 +130,7 @@ def manejar_tuberias(entrada):
     procesos = []
     prev = None
     for p in partes:
-        args = shlex.split(p)
+        args = split_con_comillas(p)
         if prev is None:
             proc = subprocess.Popen(args, stdout=subprocess.PIPE)
         else:
@@ -139,8 +142,8 @@ def manejar_tuberias(entrada):
 
 def ejecutar_en_background(entrada):
     limpio = entrada.replace("&", "").strip()
+    args = split_con_comillas(limpio)
     try:
-        args = shlex.split(limpio)
         p = subprocess.Popen(args)
         trabajos.append(p)
     except:
@@ -162,6 +165,28 @@ def mostrar_historial():
     for cmd in historial:
         print(f"{i} {cmd}")
         i += 1
+
+def split_con_comillas(comando):
+    tokens = []
+    actual = ""
+    dobles = False
+    simples = False
+    for c in comando:
+        if c == '"' and not simples:
+            dobles = not dobles
+            actual += c
+        elif c == "'" and not dobles:
+            simples = not simples
+            actual += c
+        elif c == " " and not dobles and not simples:
+            if actual:
+                tokens.append(actual)
+                actual = ""
+        else:
+            actual += c
+    if actual:
+        tokens.append(actual)
+    return tokens
 
 if __name__ == "__main__":
     iniciar_shell()
