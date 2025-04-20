@@ -124,32 +124,48 @@ def execute_command(tokens):
     
     stdin = None
     stdout = None
+    stderr = None
     
     try:
+        # Manejo de redirecciones
         if input_file:
             stdin = open(input_file, 'r')
         if output_file:
             mode = 'a' if append else 'w'
             stdout = open(output_file, mode)
-            
+        else:
+            stdout = subprocess.PIPE  # Capturar salida para formato
+        
+        stderr = subprocess.PIPE  # Siempre capturar stderr
+
+        # Ejecutar comando
         proceso = subprocess.run(
             cmd,
             stdin=stdin,
             stdout=stdout,
-            stderr=subprocess.PIPE,
+            stderr=stderr,
             text=True
         )
         
+        # Mostrar salida correctamente formateada
+        if stdout == subprocess.PIPE and proceso.stdout:
+            print(proceso.stdout)
+            
         if proceso.returncode != 0 and proceso.stderr:
-            print(proceso.stderr.strip())
+            print(proceso.stderr.strip(), file=sys.stderr)
             
     except FileNotFoundError:
-        print(f"{cmd[0]}: command not found")
+        print(f"{cmd[0]}: command not found", file=sys.stderr)
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error: {e}", file=sys.stderr)
     finally:
         for f in (stdin, stdout):
             if f: f.close()
+
+def print_prompt():
+    cwd = os.getcwd()
+    sys.stdout.write(f'\n{cwd}$ ')  # Nueva línea antes del prompt
+    sys.stdout.flush()
 
 def execute_pipeline(segments, background=False):
     processes = []
