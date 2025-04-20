@@ -1,252 +1,108 @@
 import os
-import subprocess
 import shlex
-import sys
+import subprocess
+import io
 
-history = []
-background_jobs = []
+HISTORY_FILE = "command_history.txt"
 
-def print_prompt():
-    cwd = os.getcwd()
-    sys.stdout.write(f'{cwd}$ ')
-    sys.stdout.flush()
+def ejecutar_comando(comando, background=False, stdin=None, stdout=None):
+    try:
+        proceso = subprocess.Popen(comando, stdin=stdin, stdout=stdout)
+        if not background:
+            proceso.communicate()
+    except FileNotFoundError:
+        print(f"Comando no encontrado: {comando[0]}")
 
-def update_history(command):
-    command = command.strip()
-    if not command or command.startswith(" "):
+def guardar_en_historial(comando):
+    with open(HISTORY_FILE, "a") as historial:
+        historial.write(comando + "\n")
+
+def cargar_historial():
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r") as historial:
+            return historial.readlines()
+    return []
+
+def mostrar_historial():
+    historial = cargar_historial()
+    for idx, comando in enumerate(historial, 1):
+        print(f"{idx}: {comando.strip()}")
+
+def ejecutar_desde_historial(numero):
+    historial = cargar_historial()
+    try:
+        comando = historial[int(numero) - 1].strip()
+        print(f"Ejecutando: {comando}")
+        procesar_entrada(comando)
+    except (IndexError, ValueError):
+        print("Número de historial inválido.")
+
+def procesar_entrada(entrada):
+    if not entrada.strip():
         return
-    if not history or (history and history[-1] != command):
-        history.append(command)
-    if len(history) > 50:
-        history.pop(0)
 
-def show_history():
-    for i, cmd in enumerate(history, start=1):
-        print(f"{i} {cmd}")
+    guardar_en_historial(entrada)
 
-def execute_history_command(token):
-    if token == "!!":
-        if not history:
-            print("No commands in history.")
-            return None
-        return history[-1]
-    elif token.startswith("!"):
-        ref = token[1:]
-        if ref.isdigit():
-            idx = int(ref) - 1
-            if 0 <= idx < len(history):
-                return history[idx]
+    comandos = [shlex.split(cmd) for cmd in entrada.split("|")]
+    num_comandos = len(comandos)
+
+    procesos = []
+    stdin_actual = None
+
+    for i, cmd in enumerate(comandos):
+        if ">" in cmd:
+            idx = cmd.index(">")
+            archivo_salida = cmd[idx + 1]
+            stdout_actual = open(archivo_salida, "w")
+            cmd = cmd[:idx]
+        elif "<" in cmd:
+            idx = cmd.index("<")
+            archivo_entrada = cmd[idx + 1]
+            stdin_actual = open(archivo_entrada, "r")
+            cmd = cmd[:idx]
+            stdout_actual = subprocess.PIPE if i < num_comandos - 1 else None
+        else:
+            stdout_actual = subprocess.PIPE if i < num_comandos - 1 else None
+
+        background = False
+        if cmd and cmd[-1] == "&":
+            background = True
+            cmd = cmd[:-1]
+
+        if cmd:
+            if cmd[0] == "cd":
+                if len(cmd) > 1:
+                    try:
+                        os.chdir(cmd[1])
+                    except FileNotFoundError:
+                        print(f"Directorio no encontrado: {cmd[1]}")
+                else:
+                    print("Uso: cd <directorio>")
+            elif cmd[0] == "history":
+                mostrar_historial()
+            elif cmd[0].startswith("!"):
+                ejecutar_desde_historial(cmd[0][1:])
             else:
-                print("No such command in history.")
-        else:
-            for cmd in reversed(history):
-                if cmd.startswith(ref):
-                    return cmd
-            print("No such command in history.")
-    return None
+                proceso = subprocess.Popen(cmd, stdin=stdin_actual, stdout=stdout_actual)
+                procesos.append(proceso)
+                if stdin_actual:
+                    stdin_actual.close()
+                stdin_actual = proceso.stdout if i < num_comandos - 1 else None
 
-def change_directory(path):
-    try:
-        os.chdir(path)
-    except FileNotFoundError:
-        print(f"No such directory: {path}")
+    for p in procesos:
+        p.wait()
 
-def run_in_background(command_tokens):
-    try:
-        proc = subprocess.Popen(command_tokens)
-        background_jobs.append(proc)
-        print(f"[{len(background_jobs)}] {proc.pid}")
-    except FileNotFoundError:
-        print(f"{command_tokens[0]}: command not found")
-
-def list_jobs():
-    for i, proc in enumerate(background_jobs):
-        if proc.poll() is None:
-            print(f"[{i+1}] Running PID: {proc.pid}")
-        else:
-            print(f"[{i+1}] Done PID: {proc.pid}")
-
-def bring_fg():
-    for i, proc in enumerate(background_jobs):
-        if proc.poll() is None:
-            print(f"Bringing PID {proc.pid} to foreground...")
-            proc.wait()
-            background_jobs.pop(i)
-            return
-    print("No background jobs.")
-
-
-
-def parse_command(command):
-    command = command.strip()
-    if not command:
-        return []
-    try:
-        return shlex.split(command)
-    except ValueError as e:
-        print(f"Error parsing command: {e}")
-        return None
-def execute_pipeline(commands, background=False):
-    processes = []
-    prev_stdout = None
-
-    for i, cmd in enumerate(commands):
-        cmd = cmd.strip()
-        tokens = parse_command(cmd)
-
-        stdin = prev_stdout if prev_stdout else None
-        stdout = subprocess.PIPE if i < len(commands) - 1 else None
-
-        try:
-            proc = subprocess.Popen(tokens, stdin=stdin, stdout=stdout)
-        except FileNotFoundError:
-            print(f"{tokens[0]}: command not found")
-            return
-
-        if prev_stdout:
-            prev_stdout.close()
-        prev_stdout = proc.stdout
-
-        processes.append(proc)
-
-    if not background:
-        for p in processes:
-            p.wait()
-    else:
-        background_jobs.append(processes[-1])
-
-def redirect_input_output(tokens):
-    cmd = []
-    input_file = None
-    output_file = None
-    append = False
-
-    i = 0
-    while i < len(tokens):
-        if tokens[i] == '>':
-            output_file = tokens[i + 1]
-            i += 2
-        elif tokens[i] == '>>':
-            output_file = tokens[i + 1]
-            append = True
-            i += 2
-        elif tokens[i] == '<':
-            input_file = tokens[i + 1]
-            i += 2
-        else:
-            cmd.append(tokens[i])
-            i += 1
-
-    stdin = open(input_file, 'r') if input_file else None
-    mode = 'a' if append else 'w'
-    stdout = open(output_file, mode) if output_file else None
-
-    try:
-        subprocess.run(cmd, stdin=stdin, stdout=stdout)
-    except FileNotFoundError:
-        print(f"{cmd[0]}: command not found")
-
-    if stdin:
-        stdin.close()
-    if stdout:
-        stdout.close()
-
-def process_command(command_line):
-    command_line = command_line.strip()
-    if not command_line:
-        return
-
-    if command_line.startswith("!"):
-        new_command = execute_history_command(command_line)
-        if new_command:
-            print(new_command)
-            process_command(new_command)
-        return
-
-    update_history(command_line)
-
-
-    tokens = parse_command(command_line)
-    if tokens is None:
-        return
-
-
-    update_history(command_line)
-
- 
-    if '|' in command_line:
-        segments = [seg.strip() for seg in command_line.split('|')]
-        background = segments[-1].endswith('&')
-        if background:
-            segments[-1] = segments[-1][:-1].strip()
-        execute_pipeline(segments, background)
-        return
-
-    tokens = parse_command(command_line)
-
-    if not tokens:
-        return
-
-    if tokens[0] == 'cd':
-        if len(tokens) > 1:
-            change_directory(tokens[1])
-        else:
-            change_directory(os.path.expanduser("~"))
-    elif tokens[0] == 'history':
-        show_history()
-    elif tokens[0] == 'jobs':
-        list_jobs()
-    elif tokens[0] == 'fg':
-        bring_fg()
-    elif '>' in tokens or '>>' in tokens or '<' in tokens:
-        redirect_input_output(tokens)
-    elif tokens[-1] == '&':
-        run_in_background(tokens[:-1])
-    else:
-        try:
-            subprocess.run(tokens)
-        except FileNotFoundError:
-            print(f"{tokens[0]}: command not found")
-
-def is_balanced(s):
-    single_quote = False
-    double_quote = False
-    escape = False
-    for char in s:
-        if escape:
-            escape = False
-            continue
-        if char == '\\':
-            escape = True
-        elif char == "'" and not double_quote:
-            single_quote = not single_quote
-        elif char == '"' and not single_quote:
-            double_quote = not double_quote
-    return not (single_quote or double_quote)
-
-def main():
+def shell():
     while True:
         try:
-            command_lines = []
-            print_prompt()
-            while True:
-                line = input()
-                command_lines.append(line)
-                full_command = '\n'.join(command_lines)
-                if is_balanced(full_command):
-                    break
-                sys.stdout.write('> ')
-                sys.stdout.flush()
-            command = '\n'.join(command_lines)
-            if command.strip().lower() in ("exit", "quit"):
+            entrada = input("Shell> ")
+            if entrada.strip() == "exit":
                 break
-            process_command(command)
-        except EOFError:
-            print()
-            break
+            procesar_entrada(entrada)
         except KeyboardInterrupt:
-            print()
-            command_lines = []
+            print("\nUsa 'exit' para salir.")
+        except EOFError:
+            break
 
 if __name__ == "__main__":
-    main()
+    shell()
