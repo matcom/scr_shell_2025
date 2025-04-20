@@ -3,6 +3,7 @@ import subprocess
 import shlex
 import sys
 import re
+import io
 
 history = []
 background_jobs = []
@@ -17,14 +18,9 @@ def update_history(command):
     stripped = command.strip()
     if not stripped or stripped.startswith(" "):
         return
-    
-    # Evitar duplicados consecutivos
     if history and history[-1] == stripped:
         return
-    
     history.append(stripped)
-    
-    # Mantener tamaño máximo
     if len(history) > HISTORY_MAX_SIZE:
         del history[0]
 
@@ -122,35 +118,24 @@ def execute_command(tokens):
         print("Error: comando vacío")
         return
     
-    stdin = None
-    stdout = None
-    stderr = None
+    stdin_file = None
+    stdout_file = None
     
     try:
-        # Manejo de redirecciones
         if input_file:
-            stdin = open(input_file, 'r')
+            stdin_file = open(input_file, 'r')
         if output_file:
             mode = 'a' if append else 'w'
-            stdout = open(output_file, mode)
-        else:
-            stdout = subprocess.PIPE  # Capturar salida para formato
-        
-        stderr = subprocess.PIPE  # Siempre capturar stderr
+            stdout_file = open(output_file, mode)
 
-        # Ejecutar comando
         proceso = subprocess.run(
             cmd,
-            stdin=stdin,
-            stdout=stdout,
-            stderr=stderr,
+            stdin=stdin_file,
+            stdout=stdout_file if output_file else None,
+            stderr=subprocess.PIPE,
             text=True
         )
         
-        # Mostrar salida correctamente formateada
-        if stdout == subprocess.PIPE and proceso.stdout:
-            print(proceso.stdout)
-            
         if proceso.returncode != 0 and proceso.stderr:
             print(proceso.stderr.strip(), file=sys.stderr)
             
@@ -159,13 +144,10 @@ def execute_command(tokens):
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
     finally:
-        for f in (stdin, stdout):
-            if f: f.close()
-
-def print_prompt():
-    cwd = os.getcwd()
-    sys.stdout.write(f'\n{cwd}$ ')  # Nueva línea antes del prompt
-    sys.stdout.flush()
+        if stdin_file and not stdin_file.closed:
+            stdin_file.close()
+        if stdout_file and not stdout_file.closed:
+            stdout_file.close()
 
 def execute_pipeline(segments, background=False):
     processes = []
@@ -219,7 +201,7 @@ def execute_pipeline(segments, background=False):
     else:
         for p in processes:
             p.wait()
-        if last_output_redir and stdout:
+        if last_output_redir and isinstance(stdout, io.TextIOWrapper):
             stdout.close()
 
 def process_command(command_line):
