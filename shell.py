@@ -2,6 +2,7 @@ import os
 import subprocess
 import shlex
 import sys
+import re
 from collections import deque
 
 history = deque(maxlen=50)
@@ -70,56 +71,66 @@ def parse_command(command):
         print(f"Syntax error: {e}")
         return None
 
-def execute_redirection(tokens):
-    stdin = stdout = None
-    cmd = []
-    input_file = output_file = None
+def parse_redirections(tokens):
+    input_file = None
+    output_file = None
     append = False
-    
+    cmd = []
     i = 0
+
     while i < len(tokens):
-        if tokens[i] in ('>', '>>', '<'):
-            if i+1 >= len(tokens):
-                print(f"Syntax error near {tokens[i]}")
-                return False
-            
-            if tokens[i] == '<':
-                input_file = tokens[i+1]
-            else:
-                output_file = tokens[i+1]
-                append = (tokens[i] == '>>')
-            i += 2
+        if tokens[i] == '<':
+            if i + 1 < len(tokens):
+                input_file = tokens[i + 1]
+                i += 2
+        elif tokens[i] == '>':
+            if i + 1 < len(tokens):
+                output_file = tokens[i + 1]
+                i += 2
+        elif tokens[i] == '>>':
+            if i + 1 < len(tokens):
+                output_file = tokens[i + 1]
+                append = True
+                i += 2
         else:
             cmd.append(tokens[i])
             i += 1
 
-    try:
-        if input_file:
-            stdin = open(input_file, 'r')
-        if output_file:
-            stdout = open(output_file, 'a' if append else 'w')
-            
-        subprocess.run(cmd, stdin=stdin, stdout=stdout, check=True)
-        
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        for f in (stdin, stdout):
-            if f: f.close()
-    return True
+    return cmd, output_file, input_file, append
 
 def execute_pipeline(segments, background=False):
     processes = []
     prev_out = None
-    
+    last_output_redir = None
+
+    # Procesar redirección en el último segmento
+    if segments:
+        last_segment = segments[-1]
+        tokens = parse_command(last_segment)
+        if tokens:
+            cmd, output_file, _, append = parse_redirections(tokens)
+            if output_file:
+                last_output_redir = (output_file, append)
+                segments[-1] = ' '.join(cmd)
+
     for i, segment in enumerate(segments):
         tokens = parse_command(segment)
         if not tokens:
             return
-            
+
         stdin = prev_out if prev_out else None
         stdout = subprocess.PIPE if i < len(segments)-1 else None
-        
+
+        # Manejar redirección de salida en el último comando
+        if i == len(segments)-1 and last_output_redir:
+            output_file, append = last_output_redir
+            try:
+                mode = 'a' if append else 'w'
+                stdout = open(output_file, mode)
+            except IOError as e:
+                print(f"Error opening file: {e}")
+                return
+
         try:
             proc = subprocess.Popen(
                 tokens,
@@ -130,10 +141,10 @@ def execute_pipeline(segments, background=False):
         except FileNotFoundError:
             print(f"{tokens[0]}: command not found")
             return
-            
+
         if prev_out:
             prev_out.close()
-        prev_out = proc.stdout if stdout else None
+        prev_out = proc.stdout if stdout == subprocess.PIPE else None
         processes.append(proc)
 
     if background:
@@ -141,6 +152,8 @@ def execute_pipeline(segments, background=False):
     else:
         for p in processes:
             p.wait()
+        if last_output_redir and stdout:
+            stdout.close()
 
 def process_command(command_line):
     command_line = command_line.strip()
@@ -175,8 +188,6 @@ def process_command(command_line):
         list_jobs()
     elif tokens[0] == 'fg':
         bring_foreground()
-    elif '>' in tokens or '>>' in tokens or '<' in tokens:
-        execute_redirection(tokens)
     elif tokens[-1] == '&':
         run_background(tokens[:-1])
     else:
@@ -184,6 +195,11 @@ def process_command(command_line):
             subprocess.run(tokens)
         except FileNotFoundError:
             print(f"{tokens[0]}: command not found")
+
+def normalize_command(command):
+    command = re.sub(r'(\S)(>>?|<)', r'\1 \2', command)
+    command = re.sub(r'(>>?|<)(\S)', r'\1 \2', command)
+    return command
 
 def is_balanced(command):
     quote = None
@@ -217,7 +233,7 @@ def main():
                 sys.stdout.write('> ')
                 sys.stdout.flush()
                 
-            command = ' '.join(cmd_lines)
+            command = normalize_command(' '.join(cmd_lines))
             if command.lower() in ('exit', 'quit'):
                 break
             process_command(command)
