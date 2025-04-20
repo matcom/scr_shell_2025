@@ -1,280 +1,177 @@
 import os
+import shlex
 import subprocess
+import sys
 
-historia = []
+historial = []
 trabajos = []
+MAX_HISTORIAL = 50
 
-def tokenizar(linea):
-    tokens = []
-    actual = ''
-    dentro = False
-    comilla = ''
-    for c in linea:
-        if dentro:
-            if c == comilla:
-                dentro = False
-                comilla = ''
-            else:
-                actual += c
-        else:
-            if c == '"' or c == "'":
-                dentro = True
-                comilla = c
-            elif c.isspace():
-                if actual != '':
-                    tokens.append(actual)
-                    actual = ''
-            else:
-                actual += c
-    if actual != '':
-        tokens.append(actual)
-    return tokens
+def iniciar_shell():
+    while True:
+        try:
+            entrada = input("} ")
+            if entrada.strip() == "":
+                continue
+            procesar_entrada(entrada)
+        except EOFError:
+            break
+        except KeyboardInterrupt:
+            print()
+            continue
 
-def parsear_redireccion(cmd):
-    tokens = tokenizar(cmd)
-    args = []
-    ent = None
-    sal = None
-    anex = False
+def procesar_entrada(entrada):
+    if entrada == "!!":
+        ejecutar_ultimo_comando()
+        return
+    if entrada.startswith("!") and entrada[1:].isdigit():
+        ejecutar_por_numero(int(entrada[1:]))
+        return
+    if entrada.startswith(" "):
+        return
+    if entrada.startswith("!"):
+        print("Error: Comando no válido. Usa !número")
+        return
+    agregar_a_historial(entrada)
+    ejecutar_comando(entrada)
+
+def agregar_a_historial(comando):
+    if len(historial) == 0 or historial[-1] != comando:
+        historial.append(comando)
+        if len(historial) > MAX_HISTORIAL:
+            nueva_lista = []
+            i = 1
+            while i < len(historial):
+                nueva_lista.append(historial[i])
+                i = i + 1
+            historial.clear()
+            for cmd in nueva_lista:
+                historial.append(cmd)
+
+def ejecutar_ultimo_comando():
+    if len(historial) == 0:
+        print("Error: No hay comandos anteriores.")
+        return
+    ultimo = historial[-1]
+    ejecutar_comando(ultimo)
+
+def ejecutar_por_numero(numero):
+    if len(historial) == 0:
+        print("Error: No hay comandos en el historial.")
+        return
+    if numero < 1 or numero > len(historial):
+        print("Error: Número fuera del rango del historial.")
+        return
+    comando = historial[numero - 1]
+    ejecutar_comando(comando)
+
+def ejecutar_comando(entrada):
+    if entrada == "exit":
+        sys.exit(0)
+    if entrada.startswith("cd "):
+        cambiar_directorio(entrada)
+    elif " | " in entrada:
+        manejar_tuberias(entrada)
+    elif "&" in entrada:
+        ejecutar_en_background(entrada)
+    elif entrada == "jobs":
+        mostrar_trabajos()
+    elif entrada == "fg":
+        traer_a_foreground()
+    elif entrada == "history":
+        mostrar_historial()
+    else:
+        manejar_redireccion(entrada)
+
+def cambiar_directorio(entrada):
+    partes = shlex.split(entrada)
+    if len(partes) > 1:
+        destino = partes[1]
+        try:
+            os.chdir(destino)
+        except:
+            print("Directorio no encontrado")
+
+def manejar_redireccion(entrada):
+    if ">>" in entrada:
+        partes = entrada.split(">>")
+        comando = shlex.split(partes[0])
+        archivo = partes[1].strip()
+        archivo_salida = open(archivo, "a")
+        subprocess.run(comando, stdout=archivo_salida)
+        archivo_salida.close()
+    elif ">" in entrada:
+        partes = entrada.split(">")
+        comando = shlex.split(partes[0])
+        archivo = partes[1].strip()
+        archivo_salida = open(archivo, "w")
+        subprocess.run(comando, stdout=archivo_salida)
+        archivo_salida.close()
+    elif "<" in entrada:
+        partes = entrada.split("<")
+        comando = shlex.split(partes[0])
+        archivo = partes[1].strip()
+        archivo_entrada = open(archivo, "r")
+        subprocess.run(comando, stdin=archivo_entrada)
+        archivo_entrada.close()
+    else:
+        try:
+            subprocess.run(shlex.split(entrada))
+        except:
+            print("Comando desconocido")
+
+def manejar_tuberias(entrada):
+    partes = entrada.split("|")
+    lista_de_comandos = []
     i = 0
-    while i < len(tokens):
-        if tokens[i] == '<':
-            ent = tokens[i+1]
-            i += 2
-        elif tokens[i] == '>>':
-            sal = tokens[i+1]
-            anex = True
-            i += 2
-        elif tokens[i] == '>':
-            sal = tokens[i+1]
-            anex = False
-            i += 2
+    while i < len(partes):
+        comando = shlex.split(partes[i].strip())
+        lista_de_comandos.append(comando)
+        i = i + 1
+
+    procesos = []
+    anterior = None
+    j = 0
+    while j < len(lista_de_comandos):
+        actual = lista_de_comandos[j]
+        if anterior is None:
+            proceso = subprocess.Popen(actual, stdout=subprocess.PIPE)
         else:
-            args.append(tokens[i])
-            i += 1
-    return args, ent, sal, anex
+            proceso = subprocess.Popen(actual, stdin=anterior.stdout, stdout=subprocess.PIPE)
+        procesos.append(proceso)
+        anterior = proceso
+        j = j + 1
 
-def cd(ruta):
+    salida, _ = procesos[-1].communicate()
+    print(salida.decode(), end="")
+
+def ejecutar_en_background(entrada):
+    limpio = entrada.replace("&", "").strip()
     try:
-        os.chdir(ruta)
+        argumentos = shlex.split(limpio)
+        proceso = subprocess.Popen(argumentos)
+        trabajos.append(proceso)
     except:
-        pass
+        print("Comando desconocido")
 
-def manejar_historial(cmd):
-    if cmd.startswith(' '):
-        return
-    if len(historia) > 0 and cmd == historia[-1]:
-        return
-    historia.append(cmd)
-    if len(historia) > 50:
-        historia.pop(0)
+def mostrar_trabajos():
+    i = 0
+    while i < len(trabajos):
+        proc = trabajos[i]
+        pid = proc.pid
+        print("[{}] PID {} {}".format(i + 1, pid, " ".join(proc.args)))
+        i = i + 1
 
-def expandir_comando(cmd):
-    if cmd == '!!':
-        if len(historia) > 0:
-            return historia[-1]
-        return ''
-    if cmd.startswith('!') and len(cmd) > 1:
-        clave = cmd[1:]
-        if clave.isdigit():
-            idx = int(clave) - 1
-            if 0 <= idx < len(historia):
-                return historia[idx]
-            return ''
-        for h in reversed(historia):
-            if h.startswith(clave):
-                return h
-        return ''
-    return cmd
+def traer_a_foreground():
+    if len(trabajos) > 0:
+        proc = trabajos[0]
+        trabajos.pop(0)
+        proc.wait()
 
 def mostrar_historial():
-    num = 1
-    for h in historia:
-        print(f'{num} {h}')
-        num += 1
+    i = 0
+    while i < len(historial):
+        print(str(i + 1) + " " + historial[i])
+        i = i + 1
 
-def mostrar_jobs():
-    for p, c in trabajos:
-        print(c)
-
-def fg():
-    if len(trabajos) > 0:
-        p, c = trabajos.pop(0)
-        p.wait()
-
-def ejecutar_basico(cmd, fondo):
-    args, ent, sal, anex = parsear_redireccion(cmd)
-    if len(args) == 0:
-        return
-    if args[0] == 'cd':
-        if len(args) > 1:
-            cd(args[1])
-        else:
-            cd(os.path.expanduser('~'))
-        return
-    if args[0] == 'history':
-        mostrar_historial()
-        return
-    if args[0] == 'jobs':
-        mostrar_jobs()
-        return
-    if args[0] == 'fg':
-        fg()
-        return
-    stdin = None
-    if ent:
-        try:
-            stdin = open(ent, 'r')
-        except:
-            print(f'{ent}: no existe')
-            return
-    stdout = None
-    if sal:
-        modo = 'a' if anex else 'w'
-        stdout = open(sal, modo)
-    try:
-        if fondo:
-            p = subprocess.Popen(
-                args,
-                stdin=stdin,
-                stdout=stdout or subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            trabajos.append((p, cmd))
-        else:
-            p = subprocess.Popen(
-                args,
-                stdin=stdin,
-                stdout=stdout or subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            out, _ = p.communicate()
-            if out:
-                print(out, end='')
-    except:
-        print(f'{args[0]}: comando no encontrado')
-
-def ejecutar_tuberias(cmd, fondo):
-    partes = cmd.split('|')
-    canal = None
-    ultimo = None
-    for i, seg in enumerate(partes):
-        seg = seg.strip()
-        args, ent, sal, anex = parsear_redireccion(seg)
-        if not args:
-            return
-        if args[0] in ('cd', 'history', 'jobs', 'fg'):
-            out = ''
-            if args[0] == 'cd':
-                if len(args) > 1:
-                    cd(args[1])
-                else:
-                    cd(os.path.expanduser('~'))
-            elif args[0] == 'history':
-                out = '\n'.join(f'{n} {h}' for n, h in enumerate(historia, 1))
-                if out:
-                    out += '\n'
-            elif args[0] == 'jobs':
-                out = '\n'.join(c for p, c in trabajos)
-                if out:
-                    out += '\n'
-            elif args[0] == 'fg':
-                if trabajos:
-                    p, c = trabajos.pop(0)
-                    p.wait()
-            canal = out
-            continue
-        if canal is not None:
-            stdin_pipe = subprocess.PIPE
-        else:
-            if ent:
-                try:
-                    stdin_pipe = open(ent, 'r')
-                except FileNotFoundError:
-                    print(f'{ent}: no existe')
-                    return
-            else:
-                stdin_pipe = None
-        if i < len(partes) - 1:
-            stdout_pipe = subprocess.PIPE
-        else:
-            if sal:
-                modo = 'a' if anex else 'w'
-                stdout_pipe = open(sal, modo)
-            else:
-                stdout_pipe = subprocess.DEVNULL if fondo else subprocess.PIPE
-        try:
-            p = subprocess.Popen(
-                args,
-                stdin=stdin_pipe,
-                stdout=stdout_pipe,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-        except:
-            print(f'{args[0]}: comando no encontrado')
-            return
-        if canal is not None:
-            out, _ = p.communicate(input=canal)
-        else:
-            out, _ = p.communicate()
-        if i == len(partes) - 1 and out:
-            print(out, end='')
-        canal = out
-        ultimo = p
-    if fondo and ultimo:
-        trabajos.append((ultimo, cmd))
-
-def quotes_balanced(s):
-    single = False
-    double = False
-    for c in s:
-        if c == "'" and not double:
-            single = not single
-        elif c == '"' and not single:
-            double = not double
-    return not single and not double
-
-def leer_comando():
-    try:
-        linea = input('} ')
-    except EOFError:
-        return None
-    cmd = linea
-    if not quotes_balanced(cmd):
-        while True:
-            try:
-                linea2 = input('> ')
-            except EOFError:
-                break
-            cmd += '\n' + linea2
-            if quotes_balanced(cmd):
-                break
-    return cmd
-
-def ejecutar_comando(cmd):
-    fondo = False
-    if cmd.endswith('&'):
-        fondo = True
-        cmd = cmd[:-1].strip()
-    cmd_e = expandir_comando(cmd)
-    if cmd_e == '':
-        return
-    if not cmd.startswith('!'):
-        manejar_historial(cmd)
-    if '|' in cmd_e:
-        ejecutar_tuberias(cmd_e, fondo)
-    else:
-        ejecutar_basico(cmd_e, fondo)
-
-def main():
-    while True:
-        cmd = leer_comando()
-        if cmd is None:
-            break
-        if cmd:
-            ejecutar_comando(cmd)
-
-if __name__ == '__main__':
-    main()
+iniciar_shell()
