@@ -8,12 +8,6 @@ trabajos = []
 MAX_HISTORIAL = 50
 
 def iniciar_shell():
-    if not sys.stdin.isatty():
-        data = sys.stdin.read()
-        for linea in data.splitlines():
-            if linea.strip():
-                procesar_entrada(linea)
-        return
     while True:
         try:
             entrada = input("} ")
@@ -67,10 +61,10 @@ def ejecutar_comando(entrada):
         sys.exit(0)
     if entrada.startswith("cd "):
         cambiar_directorio(entrada)
-    elif "|" in entrada:
-        manejar_tuberias(entrada)
     elif "&" in entrada:
         ejecutar_en_background(entrada)
+    elif "|" in entrada:
+        manejar_tuberias(entrada)
     elif entrada == "jobs":
         mostrar_trabajos()
     elif entrada == "fg":
