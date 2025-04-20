@@ -115,7 +115,6 @@ def execute_command(tokens):
     
     cmd, output_file, input_file, append = parse_redirections(tokens)
     if not cmd:
-        print("Error: comando vacío")
         return
     
     stdin_file = None
@@ -142,7 +141,7 @@ def execute_command(tokens):
             text=True
         )
 
-        if proceso.returncode != 0 and proceso.stderr:
+        if proceso.returncode != 0 and proceso.stderr.strip():
             print(proceso.stderr.strip(), file=sys.stderr)
 
     except FileNotFoundError:
@@ -154,7 +153,6 @@ def execute_command(tokens):
             stdin_file.close()
         if stdout_file:
             stdout_file.close()
-
 
 def execute_pipeline(segments, background=False):
     processes = []
@@ -252,7 +250,7 @@ def process_command(command_line):
 def normalize_command(command):
     command = re.sub(r'(\S)(>>?|<)', r'\1 \2', command)
     command = re.sub(r'(>>?|<)(\S)', r'\1 \2', command)
-    command = re.sub(r'\s+', ' ', command.strip())  
+    command = re.sub(r'\s+', ' ', command.strip())
     return command
 
 def is_balanced(command):
@@ -272,11 +270,13 @@ def is_balanced(command):
     return quote is None
 
 def main():
-    interactive = sys.stdin.isatty()
+    interactive = sys.stdin.isatty() and sys.stdout.isatty()
     
     while True:
         try:
             cmd_lines = []
+            full_output = []
+            
             if interactive:
                 print_prompt()
                 
@@ -284,6 +284,7 @@ def main():
                 line = sys.stdin.readline()
                 if not line:
                     raise EOFError
+                
                 cmd_lines.append(line.strip())
                 full_cmd = ' '.join(cmd_lines)
                 
@@ -298,6 +299,7 @@ def main():
             if command.lower() in ('exit', 'quit'):
                 break
                 
+
             process_command(command)
             
         except EOFError:
