@@ -78,11 +78,11 @@ def bring_fg():
 
 
 def parse_command(command):
+
     try:
         return shlex.split(command)
-    except ValueError as e:
-        print(f"Error parsing command: {e}")
-        return []  
+    except ValueError:
+        return command.strip().split()
 
 
 def execute_pipeline(commands, background=False):
