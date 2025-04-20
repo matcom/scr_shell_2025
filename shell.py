@@ -44,9 +44,9 @@ def split_commands(command: str) -> List[str]:
             escape = True
             current.append(c)
         elif in_quote:
+            current.append(c)
             if c == in_quote:
                 in_quote = None
-            current.append(c)
         elif c in ('"', "'"):
             in_quote = c
             current.append(c)
@@ -55,6 +55,7 @@ def split_commands(command: str) -> List[str]:
             current = []
         else:
             current.append(c)
+    
     if current:
         commands.append(''.join(current).strip())
     return commands
@@ -73,9 +74,9 @@ def split_pipeline(command: str) -> List[str]:
             escape = True
             current.append(c)
         elif in_quote:
+            current.append(c)
             if c == in_quote:
                 in_quote = None
-            current.append(c)
         elif c in ('"', "'"):
             in_quote = c
             current.append(c)
@@ -91,7 +92,7 @@ def split_pipeline(command: str) -> List[str]:
 
 def handle_redirections(command: str) -> Tuple[Optional[List[str]], Optional[str], Optional[str], str]:
     try:
-        tokens = shlex.split(command, posix=False)
+        tokens = shlex.split(command.replace('\\', '\\\\'), posix=False)
     except ValueError as e:
         print(f"Syntax error: {e}", file=sys.stderr)
         return (None, None, None, 'w')
@@ -105,24 +106,24 @@ def handle_redirections(command: str) -> Tuple[Optional[List[str]], Optional[str
     while i < len(tokens):
         token = tokens[i]
         if token == '>>':
-            if i + 1 >= len(tokens):
+            output_file = tokens[i+1] if i+1 < len(tokens) else None
+            if not output_file:
                 print("Syntax error: no output file after '>>'", file=sys.stderr)
                 return (None, None, None, 'w')
-            output_file = tokens[i+1]
             mode = 'a'
             i += 2
         elif token == '>':
-            if i + 1 >= len(tokens):
+            output_file = tokens[i+1] if i+1 < len(tokens) else None
+            if not output_file:
                 print("Syntax error: no output file after '>'", file=sys.stderr)
                 return (None, None, None, 'w')
-            output_file = tokens[i+1]
             mode = 'w'
             i += 2
         elif token == '<':
-            if i + 1 >= len(tokens):
+            input_file = tokens[i+1] if i+1 < len(tokens) else None
+            if not input_file:
                 print("Syntax error: no input file after '<'", file=sys.stderr)
                 return (None, None, None, 'w')
-            input_file = tokens[i+1]
             i += 2
         else:
             cmd_parts.append(token)
@@ -173,25 +174,8 @@ def execute_pipeline(commands: List[str]) -> int:
             prev_proc.stdout.close()
         prev_proc = proc
 
-    for proc in processes[:-1]:
-        proc.wait()
-        if proc.stderr:
-            err_output = proc.stderr.read().decode()
-            if err_output:
-                print(err_output, file=sys.stderr)
-
-    final_proc = processes[-1]
-    final_proc.wait()
-    
-    if final_proc.stderr:
-        err_output = final_proc.stderr.read().decode()
-        if err_output:
-            print(err_output, file=sys.stderr)
-
-    if final_proc.stdout and hasattr(final_proc.stdout, 'close'):
-        final_proc.stdout.close()
-
-    return final_proc.returncode
+    exit_codes = [p.wait() for p in processes]
+    return exit_codes[-1]
 
 def execute_external(cmd_parts: List[str], input_file: Optional[str], output_file: Optional[str], mode: str) -> int:
     stdin = None
@@ -242,11 +226,13 @@ def handle_internal(cmd_parts: List[str]) -> bool:
         path = cmd_parts[1] if len(cmd_parts) >= 2 else os.environ.get("HOME", "")
         try:
             os.chdir(path)
+            return True
         except FileNotFoundError:
             print(f"cd: directory not found: {path}", file=sys.stderr)
+            return False
         except Exception as e:
             print(f"cd: {e}", file=sys.stderr)
-        return True
+            return False
     
     if cmd_parts[0] == "history":
         if len(cmd_parts) > 1:
@@ -262,27 +248,28 @@ def handle_internal(cmd_parts: List[str]) -> bool:
 def process_command(command: str) -> int:
     if not command:
         return 0
-
     add_to_history(command)
 
     return_code = 0
-    commands = split_commands(command)
-    for cmd in commands:
+    for cmd in split_commands(command):
         if not cmd:
             continue
-        pipeline_commands = split_pipeline(cmd)
-        if len(pipeline_commands) > 1:
-            rc = execute_pipeline(pipeline_commands)
+        
+        pipeline = split_pipeline(cmd)
+        if len(pipeline) > 1:
+            rc = execute_pipeline(pipeline)
         else:
-            cmd_str = pipeline_commands[0]
-            cmd_parts, input_file, output_file, mode = handle_redirections(cmd_str)
+            cmd_parts, input_file, output_file, mode = handle_redirections(pipeline[0])
             if not cmd_parts:
                 rc = 1
             elif handle_internal(cmd_parts):
                 rc = 0
             else:
                 rc = execute_external(cmd_parts, input_file, output_file, mode)
-        return_code = rc if rc != 0 else return_code
+        
+        if rc != 0:
+            return_code = rc
+    
     return return_code
 
 def main() -> None:
