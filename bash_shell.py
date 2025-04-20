@@ -27,10 +27,10 @@ def procesar_entrada(entrada):
     if entrada.startswith("!") and entrada[1:].isdigit():
         ejecutar_por_numero(int(entrada[1:]))
         return
-    if entrada.startswith(" "):
-        return
     if entrada.startswith("!"):
         print("Error: Comando no válido. Usa !número")
+        return
+    if entrada.startswith(" "):
         return
     agregar_a_historial(entrada)
     ejecutar_comando(entrada)
@@ -81,6 +81,8 @@ def ejecutar_comando(entrada):
     elif entrada == "history":
         mostrar_historial()
     else:
+        if entrada.startswith("echo ") and "\\n" in entrada and not entrada.startswith("echo -e"):
+            entrada = entrada.replace("echo", "echo -e", 1)
         manejar_redireccion(entrada)
 
 def cambiar_directorio(entrada):
