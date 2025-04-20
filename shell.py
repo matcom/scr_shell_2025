@@ -3,10 +3,10 @@ import subprocess
 import shlex
 import sys
 import re
-from collections import deque
 
-history = deque(maxlen=50)
+history = []
 background_jobs = []
+HISTORY_MAX_SIZE = 50
 
 def print_prompt():
     cwd = os.getcwd()
@@ -15,8 +15,18 @@ def print_prompt():
 
 def update_history(command):
     stripped = command.strip()
-    if stripped and (not history or history[-1] != stripped):
-        history.append(stripped)
+    if not stripped or stripped.startswith(" "):
+        return
+    
+    # Evitar duplicados consecutivos
+    if history and history[-1] == stripped:
+        return
+    
+    history.append(stripped)
+    
+    # Mantener tamaño máximo
+    if len(history) > HISTORY_MAX_SIZE:
+        del history[0]
 
 def show_history():
     for i, cmd in enumerate(history, 1):
@@ -28,11 +38,16 @@ def execute_history_command(token):
     if token.startswith("!"):
         try:
             index = int(token[1:]) - 1
-            return history[index] if 0 <= index < len(history) else None
+            if 0 <= index < len(history):
+                return history[index]
+            print("No such command in history")
+            return None
         except ValueError:
             for cmd in reversed(history):
                 if cmd.startswith(token[1:]):
                     return cmd
+            print("No such command in history")
+            return None
     return None
 
 def change_directory(path):
@@ -98,12 +113,49 @@ def parse_redirections(tokens):
 
     return cmd, output_file, input_file, append
 
+def execute_command(tokens):
+    if not tokens:
+        return
+    
+    cmd, output_file, input_file, append = parse_redirections(tokens)
+    if not cmd:
+        print("Error: comando vacío")
+        return
+    
+    stdin = None
+    stdout = None
+    
+    try:
+        if input_file:
+            stdin = open(input_file, 'r')
+        if output_file:
+            mode = 'a' if append else 'w'
+            stdout = open(output_file, mode)
+            
+        proceso = subprocess.run(
+            cmd,
+            stdin=stdin,
+            stdout=stdout,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        if proceso.returncode != 0 and proceso.stderr:
+            print(proceso.stderr.strip())
+            
+    except FileNotFoundError:
+        print(f"{cmd[0]}: command not found")
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        for f in (stdin, stdout):
+            if f: f.close()
+
 def execute_pipeline(segments, background=False):
     processes = []
     prev_out = None
     last_output_redir = None
 
-    # Procesar redirección en el último segmento
     if segments:
         last_segment = segments[-1]
         tokens = parse_command(last_segment)
@@ -121,7 +173,6 @@ def execute_pipeline(segments, background=False):
         stdin = prev_out if prev_out else None
         stdout = subprocess.PIPE if i < len(segments)-1 else None
 
-        # Manejar redirección de salida en el último comando
         if i == len(segments)-1 and last_output_redir:
             output_file, append = last_output_redir
             try:
@@ -156,7 +207,7 @@ def execute_pipeline(segments, background=False):
             stdout.close()
 
 def process_command(command_line):
-    command_line = command_line.strip()
+    command_line = normalize_command(command_line.strip())
     if not command_line:
         return
 
@@ -191,10 +242,7 @@ def process_command(command_line):
     elif tokens[-1] == '&':
         run_background(tokens[:-1])
     else:
-        try:
-            subprocess.run(tokens)
-        except FileNotFoundError:
-            print(f"{tokens[0]}: command not found")
+        execute_command(tokens)
 
 def normalize_command(command):
     command = re.sub(r'(\S)(>>?|<)', r'\1 \2', command)
