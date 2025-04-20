@@ -132,6 +132,8 @@ def execute_command(tokens):
             mode = 'a' if append else 'w'
             stdout_file = open(output_file, mode)
             stdout = stdout_file
+        else:
+            stdout = subprocess.PIPE
 
         proceso = subprocess.run(
             cmd,
@@ -141,6 +143,9 @@ def execute_command(tokens):
             text=True
         )
 
+        if proceso.stdout and not output_file:
+            print(proceso.stdout.strip())
+            
         if proceso.returncode != 0 and proceso.stderr.strip():
             print(proceso.stderr.strip(), file=sys.stderr)
 
@@ -271,11 +276,12 @@ def is_balanced(command):
 
 def main():
     interactive = sys.stdin.isatty() and sys.stdout.isatty()
+    original_stdout = sys.stdout
     
     while True:
         try:
             cmd_lines = []
-            full_output = []
+            output_buffer = None
             
             if interactive:
                 print_prompt()
@@ -284,7 +290,6 @@ def main():
                 line = sys.stdin.readline()
                 if not line:
                     raise EOFError
-                
                 cmd_lines.append(line.strip())
                 full_cmd = ' '.join(cmd_lines)
                 
@@ -299,8 +304,17 @@ def main():
             if command.lower() in ('exit', 'quit'):
                 break
                 
-
+            if not interactive:
+                output_buffer = io.StringIO()
+                sys.stdout = output_buffer
+                
             process_command(command)
+            
+            if not interactive and output_buffer:
+                output = output_buffer.getvalue().strip()
+                sys.stdout = original_stdout
+                if output:
+                    print(output)
             
         except EOFError:
             if interactive:
@@ -311,6 +325,9 @@ def main():
                 print("\nUse 'exit' to quit")
             else:
                 break
+        finally:
+            if not interactive and output_buffer:
+                sys.stdout = original_stdout
 
 if __name__ == "__main__":
     main()
