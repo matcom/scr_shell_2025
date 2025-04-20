@@ -77,6 +77,9 @@ def execute_pipeline(commands: List[str]) -> None:
 
     for proc in processes:
         proc.wait()
+        if proc.returncode != 0:
+            sys.exit(proc.returncode)
+
 
     for f in open_files:
         f.close()
@@ -86,22 +89,23 @@ def execute_external(cmd_parts: List[str], input_file: Optional[str], output_fil
     output_fd = open(output_file, mode) if output_file else None
 
     try:
-        subprocess.run(
+        result = subprocess.run(
             cmd_parts,
             stdin=input_fd or sys.stdin,
             stdout=output_fd or sys.stdout,
-            stderr=sys.stderr,
-            check=True
+            stderr=sys.stderr
         )
+        sys.exit(result.returncode)
     except FileNotFoundError:
         print(f"{cmd_parts[0]}: comando no encontrado", file=sys.stderr)
-    except subprocess.CalledProcessError as e:
-        print(f"Error al ejecutar {cmd_parts[0]} (código {e.returncode})", file=sys.stderr)
+        sys.exit(127)
     finally:
         if input_fd:
             input_fd.close()
         if output_fd:
             output_fd.close()
+
+
 
 def handle_internal(command: List[str]) -> bool:
     if not command:
