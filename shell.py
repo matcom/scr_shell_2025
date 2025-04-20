@@ -122,34 +122,39 @@ def execute_command(tokens):
     stdout_file = None
     
     try:
+        stdin = None
+        stdout = None
+
         if input_file:
             stdin_file = open(input_file, 'r')
+            stdin = stdin_file
+
         if output_file:
             mode = 'a' if append else 'w'
             stdout_file = open(output_file, mode)
+            stdout = stdout_file
 
         proceso = subprocess.run(
             cmd,
-            stdin=stdin_file if stdin_file else None,
-            stdout=stdout_file if output_file else None,
+            stdin=stdin,
+            stdout=stdout,
             stderr=subprocess.PIPE,
             text=True
-        
-
         )
-        
+
         if proceso.returncode != 0 and proceso.stderr:
             print(proceso.stderr.strip(), file=sys.stderr)
-            
+
     except FileNotFoundError:
         print(f"{cmd[0]}: command not found", file=sys.stderr)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
     finally:
-        if stdin_file and not stdin_file.closed:
+        if stdin_file:
             stdin_file.close()
-        if stdout_file and not stdout_file.closed:
+        if stdout_file:
             stdout_file.close()
+
 
 def execute_pipeline(segments, background=False):
     processes = []
