@@ -264,31 +264,43 @@ def is_balanced(command):
     return quote is None
 
 def main():
+    interactive = sys.stdin.isatty()
+    
     while True:
         try:
             cmd_lines = []
-            print_prompt()
+            if interactive:
+                print_prompt()
+                
             while True:
                 line = sys.stdin.readline()
                 if not line:
                     raise EOFError
                 cmd_lines.append(line.strip())
                 full_cmd = ' '.join(cmd_lines)
+                
                 if is_balanced(full_cmd):
                     break
-                sys.stdout.write('> ')
-                sys.stdout.flush()
-                
+                    
+                if interactive:
+                    sys.stdout.write('> ')
+                    sys.stdout.flush()
+
             command = normalize_command(' '.join(cmd_lines))
             if command.lower() in ('exit', 'quit'):
                 break
+                
             process_command(command)
             
         except EOFError:
-            print()
+            if interactive:
+                print()
             break
         except KeyboardInterrupt:
-            print("\nUse 'exit' to quit")
+            if interactive:
+                print("\nUse 'exit' to quit")
+            else:
+                break
 
 if __name__ == "__main__":
     main()
