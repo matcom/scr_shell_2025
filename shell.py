@@ -80,8 +80,13 @@ def parse_command(command):
     if not command:
         return []
 
+   
+    try:
+        return shlex.split(command)
+    except ValueError as ve:
+        print(f"Error parsing command: {ve}")
+        return []
 
-    return shlex.split(command)
 
 def execute_pipeline(commands, background=False):
     processes = []
@@ -162,7 +167,7 @@ def process_command(command_line):
 
     update_history(command_line)
 
-    # Pipes
+ 
     if '|' in command_line:
         segments = [seg.strip() for seg in command_line.split('|')]
         background = segments[-1].endswith('&')
