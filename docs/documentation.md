@@ -250,8 +250,6 @@ Los comandos pueden conectarse utilizando tuberías (`|`):
   Resultado: SyntaxError("Unexpected end of input")
   ```
 
-
-
 #### `__repr__(self) -> str`
 - **Propósito**: Representación en cadena del objeto `Pipe`.
 - **Retorno**: Cadena que representa el objeto.
@@ -343,6 +341,34 @@ Los comandos pueden conectarse utilizando tuberías (`|`):
   Entrada: Command(['ls', '-l'], [], False)
   Proceso: Llama a _spawn_process para ejecutar 'ls -l'
   Salida: Código de retorno del proceso
+  ```
+
+#### `_handle_echo_command(self, args: List[str], redirects: List[Tuple[str, str]], background: bool) -> int`
+- **Propósito**: Implementa el comando `echo` con manejo específico.
+- **Parámetros**:
+  - `args`: Argumentos para echo.
+  - `redirects`: Lista de redirecciones.
+  - `background`: Indica si debe ejecutarse en segundo plano.
+- **Retorno**: 0 si éxito, 1 si error.
+- **Algoritmo**:
+  1. Verifica si se debe interpretar secuencias de escape (`-e`).
+  2. Une los argumentos con espacios.
+  3. Interpreta secuencias de escape si `-e` está presente.
+  4. Gestiona redirecciones de salida.
+  5. Asegura que el output termine con una nueva línea.
+- **Ejemplo**:
+  ```
+  Entrada: _handle_echo_command(['hola', 'mundo'], [], False)
+  Proceso: Imprime "hola mundo" con un salto de línea
+  Salida: 0
+  
+  Entrada: _handle_echo_command(['-e', 'hola\nmundo'], [], False)
+  Proceso: Interpreta \n como salto de línea y muestra "hola" y "mundo" en líneas separadas
+  Salida: 0
+  
+  Entrada: _handle_echo_command(['hola'], [('OUT', 'salida.txt')], False)
+  Proceso: Escribe "hola" en el archivo salida.txt
+  Salida: 0
   ```
 
 #### `_spawn_process(self, args: List[str], redirects: List[Tuple[str, str]], background: bool) -> int`
@@ -449,9 +475,11 @@ Los comandos pueden conectarse utilizando tuberías (`|`):
   - `arg`: Referencia de historial.
 - **Retorno**: Comando recuperado o None.
 - **Algoritmo**:
-  1. Para `!!`, devuelve el último comando.
-  2. Para `!n`, devuelve el comando n-ésimo.
-  3. Para `!cadena`, devuelve el último comando que comienza con esa cadena.
+  1. Maneja redirecciones y tuberías en la referencia de historial.
+  2. Para `!!`, devuelve el último comando.
+  3. Para `!n`, devuelve el comando n-ésimo.
+  4. Para `!cadena`, devuelve el último comando que comienza con esa cadena.
+  5. Combina el comando del historial con redirecciones o tuberías adicionales.
 - **Ejemplo**:
   ```
   Estado: self.history = deque(['ls', 'cd /home', 'echo hola'])
@@ -464,6 +492,12 @@ Los comandos pueden conectarse utilizando tuberías (`|`):
   
   Entrada: get_history_command('!e')
   Salida: 'echo hola'
+  
+  Entrada: get_history_command('!! > output.txt')
+  Salida: 'echo hola > output.txt'
+  
+  Entrada: get_history_command('!ls | grep txt')
+  Salida: 'ls | grep txt'
   ```
 
 ## Manejo de Errores y Señales

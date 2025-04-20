@@ -160,9 +160,54 @@ class CommandExecutor:
             return self._builtin_fg(cmd.args[1:] if len(cmd.args) > 1 else None)
         elif cmd.args[0] == "history":
             return self._builtin_history(cmd.args[1:] if len(cmd.args) > 1 else None)
-
+        elif cmd.args[0] == "echo":
+            return self._handle_echo_command(cmd.args[1:], cmd.redirects, cmd.background)
         return self._spawn_process(cmd.args, cmd.redirects, cmd.background)
 
+    def _handle_echo_command(self, args: List[str], redirects: List[Tuple[str, str]], background: bool) -> int:
+        interpret_escapes = False
+        if args and args[0] == "-e":
+            interpret_escapes = True
+            args = args[1:]
+        
+        message = ' '.join(args)
+
+        if interpret_escapes:
+            try:
+                message = message.encode().decode('unicode_escape')
+            except:
+                pass
+
+        stdout = None
+        for r_type, filename in redirects:
+            try:
+                if r_type == "OUT":
+                    stdout = open(filename, "w")
+                elif r_type == "APPEND":
+                    stdout = open(filename, "a")
+            except IOError as e:
+                safe_print(
+                    f"{COLORS['RED']}Cannot open file: {e}{COLORS['RESET']}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                return 1
+        
+        output = message + ('\n' if not message.endswith('\n') else '')
+        try:
+            if stdout:
+                stdout.write(output)
+                stdout.close()
+            else:
+                safe_print(output, end='')
+            return 0
+        except Exception as e:
+            safe_print(
+                f"{COLORS['RED']}Error in echo command: {e}{COLORS['RESET']}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
     def _spawn_process(
         self, args: List[str], redirects: List[Tuple[str, str]], background: bool
     ) -> int:
