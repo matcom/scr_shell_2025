@@ -38,6 +38,7 @@ def procesar_entrada(entrada):
         prefijo = entrada[1:]
         for cmd in reversed(historial):
             if cmd.startswith(prefijo):
+                agregar_a_historial(cmd)
                 ejecutar_comando(cmd)
                 return
         print("Error: Comando no encontrado en historial.")
@@ -57,7 +58,9 @@ def ejecutar_ultimo_comando():
     if not historial:
         print("Error: No hay comandos anteriores.")
         return
-    ejecutar_comando(historial[-1])
+    cmd = historial[-1]
+    agregar_a_historial(cmd)
+    ejecutar_comando(cmd)
 
 def ejecutar_por_numero(n):
     if not historial:
@@ -66,7 +69,9 @@ def ejecutar_por_numero(n):
     if not (1 <= n <= len(historial)):
         print("Error: Número fuera del rango del historial.")
         return
-    ejecutar_comando(historial[n-1])
+    cmd = historial[n-1]
+    agregar_a_historial(cmd)
+    ejecutar_comando(cmd)
 
 def ejecutar_comando(entrada):
     if entrada.startswith("cd "):
