@@ -49,7 +49,7 @@ def split_pipeline(command: str) -> List[str]:
 
 def handle_redirections(command: str) -> Tuple[List[str], Optional[str], Optional[str], str]:
     try:
-        tokens = shlex.split(command, posix=False)
+        tokens = shlex.split(command, posix=True)  # CAMBIO: posix=True para mejor parsing
     except ValueError:
         tokens = command.split()
     
@@ -59,16 +59,28 @@ def handle_redirections(command: str) -> Tuple[List[str], Optional[str], Optiona
     while i < len(tokens):
         token = tokens[i]
         if token == '>>':
-            output_file = tokens[i+1] if i+1 < len(tokens) else None
-            mode = 'a'
-            i += 2
+            if i+1 < len(tokens):
+                output_file = tokens[i+1]
+                mode = 'a'
+                i += 2
+            else:
+                print("Syntax error: expected filename after >>", file=sys.stderr)
+                return [], None, None, 'w'
         elif token == '>':
-            output_file = tokens[i+1] if i+1 < len(tokens) else None
-            mode = 'w'
-            i += 2
+            if i+1 < len(tokens):
+                output_file = tokens[i+1]
+                mode = 'w'
+                i += 2
+            else:
+                print("Syntax error: expected filename after >", file=sys.stderr)
+                return [], None, None, 'w'
         elif token == '<':
-            input_file = tokens[i+1] if i+1 < len(tokens) else None
-            i += 2
+            if i+1 < len(tokens):
+                input_file = tokens[i+1]
+                i += 2
+            else:
+                print("Syntax error: expected filename after <", file=sys.stderr)
+                return [], None, None, 'w'
         else:
             cmd_parts.append(token)
             i += 1
@@ -77,16 +89,17 @@ def handle_redirections(command: str) -> Tuple[List[str], Optional[str], Optiona
 def execute_pipeline(commands: List[str]) -> int:
     processes = []
     prev_proc = None
-    for cmd_str in commands:
+    for i, cmd_str in enumerate(commands):
         cmd_parts, input_file, output_file, mode = handle_redirections(cmd_str)
         stdin = prev_proc.stdout if prev_proc else None
-        stdout = subprocess.PIPE if cmd_str != commands[-1] else sys.stdout
-        
-        if input_file:
+        stdout = subprocess.PIPE if i < len(commands) - 1 else sys.stdout
+
+ 
+        if input_file and i == 0:
             stdin = open(input_file, 'r')
-        if output_file and cmd_str == commands[-1]:
+        if output_file and i == len(commands) - 1:
             stdout = open(output_file, mode)
-        
+
         proc = subprocess.Popen(
             cmd_parts,
             stdin=stdin,
@@ -98,13 +111,13 @@ def execute_pipeline(commands: List[str]) -> int:
         if prev_proc:
             prev_proc.stdout.close()
         prev_proc = proc
-    
+
     for proc in processes:
         proc.wait()
         if proc.stderr:
             for line in proc.stderr:
                 print(line, file=sys.stderr, end='')
-    
+
     return processes[-1].returncode if processes else 0
 
 def execute_external(cmd_parts: List[str], input_file: Optional[str], output_file: Optional[str], mode: str) -> int:
@@ -131,6 +144,8 @@ def execute_external(cmd_parts: List[str], input_file: Optional[str], output_fil
 def handle_internal(cmd_parts: List[str]) -> bool:
     if not cmd_parts:
         return True
+    if cmd_parts[0] in ("exit", "quit"):
+        sys.exit(0)
     if cmd_parts[0] == "cd":
         path = cmd_parts[1] if len(cmd_parts) > 1 else os.getenv("HOME", "")
         try:
@@ -148,43 +163,59 @@ def handle_internal(cmd_parts: List[str]) -> bool:
 def process_command(command: str) -> int:
     if not command:
         return 0
+
+    # Soporte para !n (historial)
+    if command.startswith('!'):
+        try:
+            index = int(command[1:]) - 1
+            if 0 <= index < len(history):
+                print(history[index])
+                return process_command(history[index])
+            else:
+                print("No such command in history.")
+                return 1
+        except ValueError:
+            print("Invalid history reference.")
+            return 1
+
     add_to_history(command)
     return_code = 0
-    
-    # Manejar múltiples comandos separados por ;
-    for sub_cmd in command.split(';'):
-        sub_cmd = sub_cmd.strip()
-        if not sub_cmd:
-            continue
-        
-        if '|' in sub_cmd:
-            rc = execute_pipeline(split_pipeline(sub_cmd))
-        else:
-            cmd_parts, input_file, output_file, mode = handle_redirections(sub_cmd)
-            if not cmd_parts:
-                rc = 1
-            elif handle_internal(cmd_parts):
-                rc = 0
+
+
+    lines = command.strip().splitlines()
+    for line in lines:
+        for sub_cmd in line.split(';'):
+            sub_cmd = sub_cmd.strip()
+            if not sub_cmd:
+                continue
+
+            if '|' in sub_cmd:
+                rc = execute_pipeline(split_pipeline(sub_cmd))
             else:
-                rc = execute_external(cmd_parts, input_file, output_file, mode)
-        
-        if rc != 0:
-            return_code = rc
-    
+                cmd_parts, input_file, output_file, mode = handle_redirections(sub_cmd)
+                if not cmd_parts:
+                    rc = 1
+                elif handle_internal(cmd_parts):
+                    rc = 0
+                else:
+                    rc = execute_external(cmd_parts, input_file, output_file, mode)
+
+            if rc != 0:
+                return_code = rc
+
     return return_code
 
 def main() -> None:
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, "r") as f:
             history.extend(line.strip() for line in f.readlines()[-MAX_HISTORY:])
-    
+
     try:
         while True:
             print_prompt()
             command = read_command()
-            return_code = process_command(command)
-            if not INTERACTIVE:
-                sys.exit(return_code)
+            process_command(command)
+           
     finally:
         with open(HISTORY_FILE, "w") as f:
             f.write("\n".join(history[-MAX_HISTORY:]))
