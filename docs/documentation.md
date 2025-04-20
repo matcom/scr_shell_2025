@@ -1,15 +1,22 @@
-# Documentación Detallada del Proyecto de Shell
+# Documentación de SCR Shell
 
-## Introducción
-Este proyecto implementa una shell personalizada en Python, diseñada para ejecutar comandos, manejar redirecciones de entrada/salida, y soportar tuberías. El objetivo es proporcionar una experiencia de línea de comandos similar a las shells tradicionales, permitiendo a los usuarios interactuar con el sistema operativo de manera eficiente.
+## Visión General
+SCR Shell es un intérprete de línea de comandos simple implementado en Python. Proporciona funcionalidades básicas de shell incluyendo ejecución de comandos, tuberías, redirección de E/S, control de trabajos e historial de comandos.
 
-## Arquitectura del Proyecto
-El proyecto está compuesto por varios componentes clave, cada uno con responsabilidades específicas:
-- **Lexer**: Analiza la entrada del usuario y la convierte en tokens, que son las unidades básicas de sintaxis.
-- **Parser**: Interpreta los tokens y construye un árbol de sintaxis abstracta (AST), que representa la estructura lógica de los comandos.
-- **AST (Árbol de Sintaxis Abstracta)**: Representa la estructura de los comandos y tuberías, permitiendo su ejecución ordenada.
-- **Ejecutor de Comandos**: Ejecuta los comandos basados en el AST, gestionando la ejecución de procesos y la redirección de flujos.
-- **Shell Principal**: Maneja el bucle principal de la shell, incluyendo la entrada del usuario, el manejo de señales, y la gestión del historial de comandos.
+## Arquitectura
+La shell está estructurada en tres componentes principales:
+
+1. **Lexer** (`ShellLexer`): Tokeniza las cadenas de entrada en tokens significativos
+2. **Parser** (`ShellParser`): Convierte los tokens en un Árbol de Sintaxis Abstracta (AST)
+3. **Ejecutor** (`CommandExecutor`): Ejecuta los comandos representados por el AST
+
+## Características
+
+### Ejecución de Comandos
+La shell puede ejecutar comandos estándar del sistema y comandos incorporados.
+
+### Tuberías
+Los comandos pueden conectarse utilizando tuberías (`|`):
 
 ## Desglose Detallado por Archivos y Funciones
 
@@ -159,15 +166,15 @@ El proyecto está compuesto por varios componentes clave, cada uno con responsab
   ```
 
 #### `_mark_pipe_background(self, pipe_node) -> None`
-- **Propósito**: Marca el último comando de una tubería para ejecutarse en segundo plano.
+- **Propósito**: Marca todos los comandos de una tubería para ejecutarse en segundo plano.
 - **Parámetros**:
   - `pipe_node`: Nodo de tipo `Pipe` a marcar.
-- **Algoritmo**: Recorre recursivamente la estructura de tuberías hasta llegar al último comando, que marca como background.
+- **Algoritmo**: Recorre recursivamente la estructura de tuberías marcando todos los comandos como background.
 - **Ejemplo**:
   ```
   Entrada: Pipe(izq=(Command(['ls'], [], False)), der=(Command(['grep', 'txt'], [], False)))
   Después de _mark_pipe_background():
-  Pipe(izq=(Command(['ls'], [], False)), der=(Command(['grep', 'txt'], [], True)))
+  Pipe(izq=(Command(['ls'], [], True)), der=(Command(['grep', 'txt'], [], True)))
   ```
 
 #### `parse_pipe(self) -> Command`
