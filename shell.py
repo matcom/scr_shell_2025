@@ -86,7 +86,6 @@ def parse_command(command):
     except ValueError as e:
         print(f"Error parsing command: {e}")
         return None
-
 def execute_pipeline(commands, background=False):
     processes = []
     prev_stdout = None
@@ -163,6 +162,14 @@ def process_command(command_line):
             print(new_command)
             process_command(new_command)
         return
+
+    update_history(command_line)
+
+
+    tokens = parse_command(command_line)
+    if tokens is None:
+        return
+
 
     update_history(command_line)
 
