@@ -93,40 +93,74 @@ def cambiar_directorio(entrada):
             print("Directorio no encontrado")
 
 def manejar_redireccion(entrada):
+    if entrada.startswith("echo "):
+        partes = shlex.split(entrada)
+        if len(partes) >= 2:
+            contenido = partes[1]
+            if "\\n" in contenido:
+                texto = contenido.replace('"', '')
+                secciones = texto.split("\\n", 1)
+                print(secciones[0])
+                if len(secciones) > 1:
+                    print(secciones[1])
+                else:
+                    print()
+                return
     if ">>" in entrada:
         partes = entrada.split(">>")
-        comando = partes[0].strip()
+        comando = shlex.split(partes[0])
         archivo = partes[1].strip()
         with open(archivo, "a") as archivo_salida:
-            subprocess.run(comando, shell=True, stdout=archivo_salida)
+            subprocess.run(comando, stdout=archivo_salida)
     elif ">" in entrada:
         partes = entrada.split(">")
-        comando = partes[0].strip()
+        comando = shlex.split(partes[0])
         archivo = partes[1].strip()
         with open(archivo, "w") as archivo_salida:
-            subprocess.run(comando, shell=True, stdout=archivo_salida)
+            subprocess.run(comando, stdout=archivo_salida)
     elif "<" in entrada:
         partes = entrada.split("<")
-        comando = partes[0].strip()
+        comando = shlex.split(partes[0])
         archivo = partes[1].strip()
         with open(archivo, "r") as archivo_entrada:
-            subprocess.run(comando, shell=True, stdin=archivo_entrada)
+            subprocess.run(comando, stdin=archivo_entrada)
     else:
         try:
-            subprocess.run(entrada, shell=True)
+            comando = shlex.split(entrada)
+            subprocess.run(comando)
         except:
             print("Comando desconocido")
 
 def manejar_tuberias(entrada):
-    try:
-        subprocess.run(entrada, shell=True)
-    except:
-        print("Error en tubería")
+    partes = entrada.split("|")
+    lista_de_comandos = []
+    i = 0
+    while i < len(partes):
+        comando = shlex.split(partes[i].strip())
+        lista_de_comandos.append(comando)
+        i = i + 1
+
+    procesos = []
+    anterior = None
+    j = 0
+    while j < len(lista_de_comandos):
+        actual = lista_de_comandos[j]
+        if anterior is None:
+            proceso = subprocess.Popen(actual, stdout=subprocess.PIPE)
+        else:
+            proceso = subprocess.Popen(actual, stdin=anterior.stdout, stdout=subprocess.PIPE)
+        procesos.append(proceso)
+        anterior = proceso
+        j = j + 1
+
+    salida, _ = procesos[-1].communicate()
+    print(salida.decode(), end="")
 
 def ejecutar_en_background(entrada):
     limpio = entrada.replace("&", "").strip()
     try:
-        proceso = subprocess.Popen(limpio, shell=True)
+        comando = shlex.split(limpio)
+        proceso = subprocess.Popen(comando)
         trabajos.append(proceso)
     except:
         print("Comando desconocido")
