@@ -11,6 +11,7 @@ class ShellLexer:
         self.current_token = ""
         self.in_quote = False
         self.quote_char = ""
+        self.token_was_quoted = False
 
     def tokenize(self, line: str) -> List[str]:
 
@@ -22,12 +23,14 @@ class ShellLexer:
                 if not self.in_quote:
                     self.in_quote = True
                     self.quote_char = char
+                    self.token_was_quoted = True
                     i += 1
                     continue
                 elif char == self.quote_char:
                     self.in_quote = False
                     self.add_token()
                     self.quote_char = ""
+                    self.token_was_quoted = False
                     i += 1
                     continue
 
@@ -61,5 +64,9 @@ class ShellLexer:
 
     def add_token(self):
         if self.current_token:
-            self.tokens.append(self.current_token)
+            if self.token_was_quoted and self.current_token in [">", "<", ">>", "|", "&"]:
+
+                self.tokens.append(f"__QUOTED__{self.current_token}")
+            else:
+                self.tokens.append(self.current_token)
             self.current_token = ""

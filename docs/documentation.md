@@ -114,13 +114,17 @@ Los comandos pueden conectarse utilizando tuberías (`|`):
   2. Maneja comillas para agrupar texto.
   3. Identifica caracteres especiales (`|`, `<`, `>`, `&`).
   4. Separa la entrada en tokens.
+  5. Marca con un prefijo especial `__QUOTED__` los tokens que contienen caracteres especiales y estaban entre comillas.
 - **Ejemplo de uso**:
   ```
   Entrada: echo "Hola Mundo" > salida.txt
-  Salida: ['echo', '"Hola Mundo"', '>', 'salida.txt']
+  Salida: ['echo', 'Hola Mundo', '>', 'salida.txt']
   
   Entrada: ls -la | grep ".txt" | sort
   Salida: ['ls', '-la', '|', 'grep', '".txt"', '|', 'sort']
+  
+  Entrada: echo ">"
+  Salida: ['echo', '__QUOTED__>']
   ```
 
 #### `add_token(self)`
@@ -142,8 +146,17 @@ Los comandos pueden conectarse utilizando tuberías (`|`):
 - **Parámetros**:
   - `tokens`: Lista de tokens generados por el lexer.
 - **Inicialización**:
-  - `self.tokens`: Almacena los tokens.
+  - `self.tokens`: Procesa los tokens eliminando el prefijo "__QUOTED__" cuando corresponde.
   - `self.pos`: Posición actual en la lista de tokens.
+  - `self.quoted_tokens`: Lista de índices de tokens que originalmente estaban entre comillas.
+- **Algoritmo**:
+  1. Procesa los tokens, eliminando el prefijo de tokens especiales pero manteniendo registro de cuáles estaban marcados.
+  2. Mantiene una lista de índices de tokens que estaban entrecomillados.
+- **Ejemplo**:
+  ```
+  Entrada: ['echo', '__QUOTED__>']
+  Resultado: self.tokens = ['echo', '>'], self.quoted_tokens = [1]
+  ```
 
 #### `parse(self) -> Command`
 - **Propósito**: Punto de entrada para analizar los tokens.
@@ -182,7 +195,8 @@ Los comandos pueden conectarse utilizando tuberías (`|`):
 - **Retorno**: Un objeto `Command` o `Pipe`.
 - **Algoritmo**:
   1. Llama a `parse_redirect()` para obtener el comando izquierdo.
-  2. Si encuentra `|`, construye un `Pipe` con el comando izquierdo y otro comando (derecho).
+  2. Si encuentra `|` y no estaba entre comillas, construye un `Pipe` con el comando izquierdo y otro comando (derecho).
+  3. Ignora los operadores de tubería que estaban entre comillas originalmente.
 - **Ejemplo**:
   ```
   Entrada: ['ls', '|', 'grep', 'txt']
@@ -190,6 +204,10 @@ Los comandos pueden conectarse utilizando tuberías (`|`):
   1. parse_redirect() devuelve Command(['ls'], [], False)
   2. Encuentra '|', obtiene otro comando Command(['grep', 'txt'], [], False)
   Salida: Pipe(izq=(Command(['ls'], [], False)), der=(Command(['grep', 'txt'], [], False)))
+  
+  Entrada: ['echo', '>']  # Donde '>' estaba entre comillas
+  Proceso: Detecta que '>' estaba entre comillas y lo trata como texto normal
+  Salida: Command(['echo', '>'], [], False)
   ```
 
 #### `parse_redirect(self) -> Command`
@@ -197,8 +215,9 @@ Los comandos pueden conectarse utilizando tuberías (`|`):
 - **Retorno**: Un objeto `Command`.
 - **Algoritmo**:
   1. Recopila argumentos del comando.
-  2. Identifica redirecciones (`<`, `>`, `>>`).
+  2. Identifica redirecciones (`<`, `>`, `>>`) que no estaban entre comillas.
   3. Crea un objeto `Command` con los argumentos y redirecciones.
+  4. Los símbolos de redirección que estaban entre comillas son tratados como argumentos normales.
 - **Ejemplo**:
   ```
   Entrada: ['echo', 'hola', '>', 'salida.txt']
@@ -206,6 +225,10 @@ Los comandos pueden conectarse utilizando tuberías (`|`):
   1. Recopila 'echo', 'hola' como argumentos
   2. Encuentra '>' y 'salida.txt', lo agrega como redirección
   Salida: Command(['echo', 'hola'], [('OUT', 'salida.txt')], False)
+  
+  Entrada: ['echo', '>']  # Donde '>' estaba entre comillas
+  Proceso: Trata '>' como un argumento normal porque estaba entre comillas
+  Salida: Command(['echo', '>'], [], False)
   ```
 
 #### `peek(self) -> str`
@@ -499,6 +522,9 @@ Los comandos pueden conectarse utilizando tuberías (`|`):
   Entrada: get_history_command('!ls | grep txt')
   Salida: 'ls | grep txt'
   ```
+
+## Manejo de Caracteres Especiales
+La shell maneja de forma especial los caracteres de control (`>`, `<`, `>>`, `|`, `&`) cuando aparecen entre comillas, tratándolos como texto literal en lugar de como operadores de redirección o tuberías. Esto permite imprimir caracteres especiales usando `echo ">"` sin que se interpreten como redirecciones.
 
 ## Manejo de Errores y Señales
 El proyecto maneja errores comunes como `SyntaxError` y `FileNotFoundError`, y señales como `SIGINT` para interrumpir procesos en ejecución. Ejemplo: Si un archivo especificado en un comando no existe, se informa al usuario con un mensaje de error claro.

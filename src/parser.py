@@ -8,8 +8,20 @@ class ShellParser:
     """
 
     def __init__(self, tokens: List[str]) -> None:
-        self.tokens = tokens
+       
+        self.tokens = []
+        for token in tokens:
+            if token.startswith("__QUOTED__"):
+                self.tokens.append(token[10:])  # Quitar "__QUOTED__"
+            else:
+                self.tokens.append(token)
+        
         self.pos = 0
+        self.quoted_tokens = []
+        
+        for i, token in enumerate(tokens):
+            if token.startswith("__QUOTED__"):
+                self.quoted_tokens.append(i)
 
         if self.tokens:
             self._validate_token()
@@ -38,7 +50,7 @@ class ShellParser:
 
         cmd = self.parse_pipe()
 
-        if self.peek() == "&":
+        if self.peek() == "&" and self.pos not in self.quoted_tokens:
             self.consume("&")
             if isinstance(cmd, Command):
                 cmd.background = True
@@ -61,7 +73,7 @@ class ShellParser:
     def parse_pipe(self) -> Command:
         left = self.parse_redirect()
 
-        while self.peek() == "|":
+        while self.peek() == "|" and self.pos not in self.quoted_tokens:
             self.consume("|")
             if self.pos >= len(self.tokens) or self.peek() in ("|", "&"):
                 raise SyntaxError("Comando incompleto después del pipe '|'")
@@ -78,9 +90,9 @@ class ShellParser:
 
         while self.pos < len(self.tokens):
             token = self.peek()
+            current_pos = self.pos
 
-            if token == "<":
-
+            if token == "<" and current_pos not in self.quoted_tokens:
                 if not args and not redirects:
                     raise SyntaxError("Redirección de entrada '<' sin comando previo")
 
@@ -95,7 +107,7 @@ class ShellParser:
                     raise SyntaxError("Falta archivo de entrada después de '<'")
                 file = self.consume_any()
                 redirects.append(("IN", file))
-            elif token == ">":
+            elif token == ">" and current_pos not in self.quoted_tokens:
                 if not args and not redirects:
                     raise SyntaxError("Redirección de salida '>' sin comando previo")
 
@@ -110,7 +122,7 @@ class ShellParser:
                     raise SyntaxError("Falta archivo de salida después de '>'")
                 file = self.consume_any()
                 redirects.append(("OUT", file))
-            elif token == ">>":
+            elif token == ">>" and current_pos not in self.quoted_tokens:
                 if not args and not redirects:
                     raise SyntaxError("Redirección de append '>>' sin comando previo")
 
@@ -125,7 +137,7 @@ class ShellParser:
                     raise SyntaxError("Falta archivo de salida después de '>>'")
                 file = self.consume_any()
                 redirects.append(("APPEND", file))
-            elif token in ("|", "&"):
+            elif token in ("|", "&") and current_pos not in self.quoted_tokens:
                 break
             else:
                 args.append(self.consume_any())
