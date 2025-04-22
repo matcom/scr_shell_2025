@@ -317,7 +317,7 @@ class CommandExecutor:
             if not cmd.args:
                 continue
 
-            if cmd.args[0] in ["cd", "jobs", "history"]:
+            if cmd.args[0] in ["cd", "jobs", "history",'echo']:
                 with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_out:
                     temp_name = temp_out.name
                     temp_files.append(temp_name)
@@ -334,6 +334,8 @@ class CommandExecutor:
                             self._builtin_history(
                                 cmd.args[1:] if len(cmd.args) > 1 else None
                             )
+                        elif cmd.args[0]=='echo':
+                            self._handle_echo_command(cmd.args[1:], cmd.redirects, cmd.background)
                     except Exception as e:
                         sys.stdout = old_stdout
                         safe_print(

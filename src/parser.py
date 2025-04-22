@@ -24,14 +24,14 @@ class ShellParser:
                 self.quoted_tokens.append(i)
 
         if self.tokens:
-            self._validate_token()
+            self._validate_token(tokens)
 
-    def _validate_token(self) -> None:
+    def _validate_token(self,tokens) -> None:
         if not self.tokens:
             return
 
-        for i, token in enumerate(self.tokens):
-            if token == "&" and i < len(self.tokens) - 1:
+        for i, token in enumerate(tokens):
+            if token == "&" and i < len(tokens) - 1:
                 raise SyntaxError(f"Token '&' solo puede aparecer al final del comando")
 
         if self.tokens[0] in ("<", ">", ">>", "|"):
